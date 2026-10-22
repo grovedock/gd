@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+// Landing a change request by itself once it's ready (and, where the branch asks, only after
+// the result was tested). Kept apart so clients load it when first used.
+package gd.v1;
+
+import "gd_platform.proto";
+
+service Landing {
+  // Lands the change request by itself once nothing blocks it (reviews, checks, conflicts),
+  // as the caller. A new version keeps it on; landing, closing or turning it off ends it.
+  rpc SetLandWhenReady(SetLandWhenReadyRequest) returns (ChangeRequest);
+}
+
+message SetLandWhenReadyRequest {
+  ChangeRequestRef ref = 1;
+  bool on = 2;
+}

@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+// Bringing a repository from GitHub, GitLab or Bitbucket, from the app: the server runs the
+// move (history with the same commit ids, open pull requests, issues) as a job you can watch.
+// Kept apart so clients load it when first used.
+package gd.v1;
+
+import "gd.proto";
+import "gd_platform.proto";
+
+service Imports {
+  // For an owner you administer (your account, or an organisation). The repository is made
+  // at once; history, pull requests and issues follow.
+  rpc StartImport(StartImportRequest) returns (Import);
+  rpc GetImport(ImportRef) returns (Import);
+  // Your imports, newest first.
+  rpc ListImports(Empty) returns (ListImportsResponse);
+}
+
+message StartImportRequest {
+  // https://github.com/OWNER/NAME (or gitlab.com, bitbucket.org).
+  string source = 1;
+  string owner = 2;
+  string name = 3;
+  Visibility visibility = 4;
+  // For a private GitHub repository, and pull requests and issues: used for this import only,
+  // never stored.
+  string github_token = 5;
+  bool pull_requests = 6;
+  bool issues = 7;
+}
+
+message ImportRef { string id = 1; }
+
+enum ImportState {
+  IMPORT_QUEUED = 0;
+  IMPORT_RUNNING = 1;
+  IMPORT_DONE = 2;
+  IMPORT_FAILED = 3;
+}
+
+message Import {
+  string id = 1;
+  string source = 2;
+  RepositoryRef repository = 3;
+  ImportState state = 4;
+  // What it's doing now: cloning, history, pull requests, issues, done.
+  string step = 5;
+  uint32 branches_done = 6;
+  uint32 branches = 7;
+  uint64 commits = 8;
+  uint32 pull_requests_done = 9;
+  uint32 pull_requests = 10;
+  uint32 issues_done = 11;
+  uint32 issues = 12;
+  // What was skipped, and why.
+  repeated string notes = 13;
+  string error = 14;
+  string started_by = 15;
+  int64 started_at_ms = 16;
+  int64 finished_at_ms = 17;
+  string default_branch = 18;
+  // What was asked to come with the history.
+  bool pull_requests_wanted = 19;
+  bool issues_wanted = 20;
+}
+
+message ListImportsResponse { repeated Import imports = 1; }

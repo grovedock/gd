@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+// The service's status, for anyone: each part's state and the last 90 days of incidents, which
+// site administrators post. Kept apart so clients load it when first used.
+package gd.v1;
+
+import "gd.proto";
+
+service Status {
+  // No token needed.
+  rpc GetServiceStatus(Empty) returns (ServiceStatus);
+  // Site administrators only.
+  rpc OpenIncident(OpenIncidentRequest) returns (Incident);
+  rpc UpdateIncident(UpdateIncidentRequest) returns (Incident);
+}
+
+message IncidentUpdate {
+  int64 at_ms = 1;
+  string text = 2;
+}
+
+message Incident {
+  uint64 id = 1;
+  string title = 2;
+  // outage, degraded or maintenance.
+  string impact = 3;
+  // Which parts of the service it touches (names as in ServiceStatus).
+  repeated string components = 4;
+  int64 started_at_ms = 5;
+  // 0 while it's open.
+  int64 resolved_at_ms = 6;
+  // Oldest first.
+  repeated IncidentUpdate updates = 7;
+}
+
+message ComponentStatus {
+  string name = 1;
+  // working, degraded, outage, maintenance or not_offered.
+  string state = 2;
+  string detail = 3;
+}
+
+message ServiceStatus {
+  repeated ComponentStatus components = 1;
+  // The last 90 days, newest first; open ones first of all.
+  repeated Incident incidents = 2;
+  int64 checked_at_ms = 3;
+}
+
+message OpenIncidentRequest {
+  string title = 1;
+  string impact = 2;
+  repeated string components = 3;
+  // The first update: what's happening.
+  string text = 4;
+}
+
+message UpdateIncidentRequest {
+  uint64 id = 1;
+  string text = 2;
+  bool resolve = 3;
+}

@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+// Canonical encodings of Grovedock's content-addressed objects. Ids are
+// BLAKE3-256(tag || canonical bytes) with tag 1 = blob (raw file bytes, not a message),
+// 2 = tree, 3 = changeset. Stored and wire payloads are `tag || zstd(bytes)`; a large file
+// is stored under its blob id as `0x03 || Manifest`. `ChangesetInfo.encoded` carries a
+// canonical Changeset.
+package gd.objects.v1;
+
+enum Mode {
+  FILE = 0;
+  EXEC = 1;
+  SYMLINK = 2;
+  DIR = 3;
+}
+
+// Directory entry. A tree's entries are sorted by name (bytewise) and names are unique.
+message TreeEntry {
+  string name = 1;
+  Mode mode = 2;
+  bytes id = 3;
+}
+
+message Tree {
+  repeated TreeEntry entries = 1;
+}
+
+// Change relative to the changeset's first parent. Empty `blob` = delete.
+message FileChange {
+  string path = 1;
+  bytes blob = 2;
+  Mode mode = 3;
+}
+
+message Changeset {
+  repeated bytes parents = 1;
+  repeated FileChange changes = 2;
+  string author = 3;
+  string message = 4;
+  int64 timestamp_ms = 5;
+  // For a changeset that came from git: what git needs to make the very same commit again.
+  // Absent for changes made with gd (so their ids don't change); not kept when a land rebases.
+  GitOrigin git = 6;
+}
+
+// A git commit's identity beyond what a changeset holds, kept so that the git view of a
+// history (git over HTTPS, mirrors, exports) reproduces the original commit ids.
+message GitOrigin {
+  // As git wrote them: "Name <email> SECONDS +ZZZZ".
+  string author = 1;
+  string committer = 2;
+  // The message's encoding when it isn't UTF-8 (then `message` holds its bytes).
+  string encoding = 3;
+  bytes message = 4;
+  // A signed commit's signature, verbatim, and its hash algorithm ("sha1").
+  string signature_algorithm = 5;
+  bytes signature = 6;
+  // Submodule entries (gd keeps no submodules; git's trees do).
+  repeated Gitlink gitlinks = 7;
+  // The commit id this must reproduce: checked when the git view is written, never trusted.
+  string commit = 8;
+}
+
+message Gitlink {
+  string path = 1;
+  string commit = 2;
+}
+
+message ChunkRef {
+  bytes id = 1;
+  uint64 len = 2;
+}
+
+// Large file: content is the concatenation of the chunks (each a blob object).
+message Manifest {
+  uint64 size = 1;
+  repeated ChunkRef chunks = 2;
+}

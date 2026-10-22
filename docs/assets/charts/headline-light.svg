@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 132" width="840" height="132" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Grovedock lands 504 changes per second from 1,000 agents where git manages 0.2; Grovedock clones git/git in 0.46 s where git takes 19.1 s.">
+<text x="0" y="22" font-size="15" font-weight="600" fill="#23282D">1,000 agents landing on one branch</text>
+<text x="0" y="42" font-size="12" fill="#5B6670">changes landed per second, higher is better</text>
+<text x="0" y="79" font-size="13" font-weight="600" fill="#23282D">Grovedock</text>
+<rect x="128" y="66" width="202.0" height="18" rx="3" fill="#16324F"/>
+<text x="338.0" y="79" font-size="13" font-weight="600" fill="#23282D">504 /s</text>
+<text x="0" y="113" font-size="13" font-weight="400" fill="#23282D">git push + rebase</text>
+<rect x="128" y="100" width="2.0" height="18" rx="3" fill="#A9B8B0"/>
+<text x="138.0" y="113" font-size="13" font-weight="400" fill="#23282D">0.2 /s</text>
+<text x="440" y="22" font-size="15" font-weight="600" fill="#23282D">Clone git/git (82,443 commits)</text>
+<text x="440" y="42" font-size="12" fill="#5B6670">seconds, lower is better</text>
+<text x="440" y="79" font-size="13" font-weight="600" fill="#23282D">Grovedock</text>
+<rect x="568" y="66" width="4.9" height="18" rx="3" fill="#16324F"/>
+<text x="580.9" y="79" font-size="13" font-weight="600" fill="#23282D">0.46 s</text>
+<text x="440" y="113" font-size="13" font-weight="400" fill="#23282D">git clone</text>
+<rect x="568" y="100" width="202.0" height="18" rx="3" fill="#A9B8B0"/>
+<text x="778.0" y="113" font-size="13" font-weight="400" fill="#23282D">19.1 s</text>
+<line x1="420" y1="8" x2="420" y2="124" stroke="#D5DBD7"/>
+</svg>

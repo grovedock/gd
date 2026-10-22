@@ -1,0 +1,539 @@
+syntax = "proto3";
+
+// Runs: CI from the workflow files a repository already has (`.grovedock/workflows/`, or
+// `.github/workflows/`), run by runners the owner registers on their own machines.
+//
+// Trust decides what a run gets, not approval clicks: only code already on a protected branch
+// gets the repository's secrets and may write the cache. Changes from agents, other branches
+// and change requests run at once with neither, and every job's token is read-only for its
+// one repository. Code from outside the owner (a fork) runs only after a maintainer approves,
+// and only on runners registered to take it.
+//
+// Kept apart so clients load it when first used.
+package gd.v1;
+
+import "gd.proto";
+import "gd_platform.proto";
+
+service Runs {
+  // Runs of a repository, newest first. Read access.
+  rpc ListRuns(ListRunsRequest) returns (ListRunsResponse);
+  rpc GetRun(RunRef) returns (Run);
+  // A job's log, from a byte offset: call again with `next_offset` to follow a live job.
+  rpc ReadLog(ReadLogRequest) returns (ReadLogResponse);
+  // Write access.
+  rpc CancelRun(RunRef) returns (Run);
+  // Runs it again on the same change: the failed jobs (and what needs them), or all.
+  rpc RerunRun(RerunRequest) returns (Run);
+  // The workflows a branch has (default: the default branch): what starts each, its jobs, and
+  // why one can't be read. Read access.
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+  // A link to download one of a run's artifacts (files a job kept), good for a few minutes.
+  rpc ArtifactUrl(RunArtifactRef) returns (ArtifactLink);
+  // Starts a workflow that can be started by hand (`manual`, GitHub's `workflow_dispatch`).
+  rpc StartRun(StartRunRequest) returns (Run);
+  // Lets a run of an outsider's code (a fork) go ahead. Maintain access.
+  rpc ApproveRun(RunRef) returns (Run);
+
+  // Secrets: names and when they changed are listed; values are never sent back. Only runs
+  // of code already on a protected branch get them. Admin access.
+  rpc SetSecret(SetSecretRequest) returns (Empty);
+  rpc ListSecrets(RepositoryRef) returns (ListSecretsResponse);
+  rpc DeleteSecret(SecretRef) returns (Empty);
+  // Variables (`${{ vars.NAME }}`): not secret, so listed with their values. Set by admins,
+  // listed to writers.
+  rpc SetVariable(SetVariableRequest) returns (Empty);
+  rpc ListVariables(RepositoryRef) returns (ListVariablesResponse);
+  rpc DeleteVariable(VariableRef) returns (Empty);
+  // Environments, and approving a job that deploys to one (one of its reviewers, a person).
+  rpc SetEnvironment(Environment) returns (Environment);
+  rpc ListEnvironments(RepositoryRef) returns (ListEnvironmentsResponse);
+  rpc DeleteEnvironment(EnvironmentRef) returns (Empty);
+  rpc ApproveDeployment(ApproveDeploymentRequest) returns (Run);
+
+  // Runners belong to an owner (a person or an organisation) and take jobs for its
+  // repositories. Registering and removing need the owner's administrators.
+  rpc RegisterRunner(RegisterRunnerRequest) returns (RegisterRunnerResponse);
+  rpc ListRunners(ListRunnersRequest) returns (ListRunnersResponse);
+  rpc RemoveRunner(RemoveRunnerRequest) returns (Empty);
+  // Replaces the labels a runner answers to (besides its machine's), without registering it again.
+  rpc UpdateRunner(UpdateRunnerRequest) returns (Runner);
+  // Which marketplace actions (`uses: owner/repo@ref`) an owner's jobs may run. Read: the owner's
+  // members; set: its administrators.
+  rpc GetActionsPolicy(ListRunnersRequest) returns (ActionsPolicy);
+  rpc SetActionsPolicy(ActionsPolicy) returns (ActionsPolicy);
+  // Runs the commit an action's tag points at now, for an action whose tag moved since its first
+  // use. Administrators of the owner.
+  rpc AcceptActionPin(AcceptActionPinRequest) returns (ActionsPolicy);
+
+  // Called by runners, which identify themselves with their key in the `x-gd-runner` header
+  // (not a person's token). Waits up to `wait_ms` for a job that fits the runner's labels.
+  rpc ClaimJob(ClaimJobRequest) returns (ClaimJobResponse);
+  // Links for a job's runner to upload an artifact of its run, or download one (empty `name`:
+  // every artifact of the run).
+  rpc RunnerArtifacts(RunnerArtifactsRequest) returns (RunnerArtifactsResponse);
+  // Makes (or adds to) a release from a trusted run, as whoever caused the run, and gives links
+  // to upload its files. The job's steps never hold a token that could do this.
+  rpc RunnerRelease(RunnerReleaseRequest) returns (RunnerReleaseResponse);
+  // Progress of a claimed job: log output, steps, and finally its result. Answers whether
+  // the job was cancelled, so the runner stops it.
+  rpc ReportJob(ReportJobRequest) returns (ReportJobResponse);
+}
+
+enum RunState {
+  RUN_STATE_UNSPECIFIED = 0;
+  RUN_STATE_QUEUED = 1;
+  RUN_STATE_RUNNING = 2;
+  RUN_STATE_PASSED = 3;
+  RUN_STATE_FAILED = 4;
+  RUN_STATE_CANCELLED = 5;
+  // Its condition was false, or something it needs didn't pass.
+  RUN_STATE_SKIPPED = 6;
+  // An outsider's code, waiting for a maintainer to approve it.
+  RUN_STATE_WAITING = 7;
+  // The workflow file couldn't be read; `problem` says why.
+  RUN_STATE_INVALID = 8;
+}
+
+message RunRef {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+}
+
+message RunStep {
+  uint32 index = 1;
+  string name = 2;
+  RunState state = 3;
+  int64 started_at_ms = 4;
+  int64 finished_at_ms = 5;
+  // Where the step's output starts in the job's log.
+  uint64 log_offset = 6;
+}
+
+message RunJob {
+  uint64 id = 1;
+  // Unique in the run: the job id, with its matrix values.
+  string key = 2;
+  string name = 3;
+  RunState state = 4;
+  repeated string runs_on = 5;
+  // Job ids it waits for.
+  repeated string needs = 6;
+  // The runner that took it.
+  string runner = 7;
+  int64 started_at_ms = 8;
+  int64 finished_at_ms = 9;
+  repeated RunStep steps = 10;
+  // Why it failed, in one line: the step, and the first error line of its output.
+  string failure = 11;
+  // The same tree has both passed and failed this job: its result isn't to be trusted alone.
+  bool flaky = 12;
+  uint64 log_bytes = 13;
+  // Passed earlier on an identical tree, so not run again.
+  bool reused = 14;
+  // No runner registered for this owner has these labels.
+  bool no_runner = 15;
+  // The environment it deploys to (`environment:`), and, while it waits for one of the
+  // environment's reviewers, true; then who approved it.
+  string environment = 16;
+  bool awaiting_approval = 17;
+  string approved_by = 18;
+  // What its steps flagged (`::error`, `::warning`, `::notice`), and its summary
+  // (`$GITHUB_STEP_SUMMARY`, Markdown).
+  repeated Annotation annotations = 19;
+  string summary = 20;
+}
+
+message Annotation {
+  // error, warning or notice.
+  string level = 1;
+  string message = 2;
+  string title = 3;
+  // A path in the repository, and a line in it (0: none).
+  string file = 4;
+  uint32 line = 5;
+  // The step that flagged it.
+  string step = 6;
+}
+
+message Run {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  // The workflow's name, and its file.
+  string workflow = 3;
+  string file = 4;
+  // push, change_request, schedule or manual (GitHub's pull_request and workflow_dispatch, in Grovedock's words).
+  string event = 5;
+  // The branch (or `tags/NAME`) it ran for.
+  string ref = 6;
+  bytes changeset = 7;
+  // The same change as a git commit, when the repository has a git view.
+  string git_commit = 8;
+  // Who caused it (the pusher, the change request's author, who started it).
+  string actor = 9;
+  // The change request it ran for; 0 for none.
+  uint64 change_request = 10;
+  RunState state = 11;
+  int64 created_at_ms = 12;
+  int64 started_at_ms = 13;
+  int64 finished_at_ms = 14;
+  repeated RunJob jobs = 15;
+  // The change's first line.
+  string title = 16;
+  // Why it's invalid, or the first failure.
+  string problem = 17;
+  // What in the workflow file was read but not acted on.
+  repeated string notes = 18;
+  // Ran with the repository's secrets (code already on a protected branch).
+  bool trusted = 19;
+  // Files its jobs kept (upload-artifact).
+  repeated RunArtifact artifacts = 20;
+}
+
+message RunArtifact {
+  string name = 1;
+  uint64 size = 2;
+  string sha256 = 3;
+  int64 expires_at_ms = 4;
+  // The job that kept it.
+  uint64 job_id = 5;
+}
+
+message RunArtifactRef {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  string name = 3;
+}
+
+message ArtifactLink {
+  // A path on the server, like /download?…
+  string url = 1;
+  int64 expires_at_ms = 2;
+}
+
+message RunnerArtifactsRequest {
+  uint64 job_id = 1;
+  string name = 2;
+  bool upload = 3;
+  // For an upload: days to keep it (1–30, default 7).
+  uint32 retention_days = 4;
+}
+
+message RunnerArtifactsResponse {
+  repeated RunnerArtifactLink links = 1;
+}
+
+message RunnerArtifactLink {
+  string name = 1;
+  string url = 2;
+}
+
+message ListRunsRequest {
+  RepositoryRef repository = 1;
+  // Only runs for this branch, change request or workflow file; empty or 0 for all.
+  string ref = 2;
+  uint64 change_request = 3;
+  string file = 4;
+  uint32 limit = 5;
+  // A run number to continue below.
+  uint64 before = 6;
+}
+message ListRunsResponse { repeated Run runs = 1; }
+
+message ReadLogRequest {
+  RepositoryRef repository = 1;
+  uint64 job_id = 2;
+  uint64 offset = 3;
+  // At most this many bytes; 0 for the server's default.
+  uint32 limit = 4;
+}
+message ReadLogResponse {
+  bytes data = 1;
+  uint64 next_offset = 2;
+  // The job has finished and everything was read.
+  bool complete = 3;
+}
+
+message RerunRequest {
+  RunRef ref = 1;
+  // The failed and cancelled jobs (and those needing them) only.
+  bool failed_only = 2;
+}
+
+message StartRunRequest {
+  RepositoryRef repository = 1;
+  // The workflow file, like `.github/workflows/release.yml`.
+  string file = 2;
+  string ref = 3;
+  map<string, string> inputs = 4;
+}
+
+message Runner {
+  string id = 1;
+  string owner = 2;
+  string name = 3;
+  repeated string labels = 4;
+  // Takes outsiders' code (forks), once approved. Such runners should start each job on a
+  // fresh machine.
+  bool outsiders = 5;
+  int64 created_at_ms = 6;
+  int64 last_seen_ms = 7;
+  // The job it's running, 0 for none.
+  uint64 busy_with = 8;
+  string version = 9;
+  string os = 10;
+}
+
+message RegisterRunnerRequest {
+  string owner = 1;
+  string name = 2;
+  // Labels besides those the runner reports for its machine (OS, architecture).
+  repeated string labels = 3;
+  bool outsiders = 4;
+}
+message RegisterRunnerResponse {
+  Runner runner = 1;
+  // The runner's key, shown once: the runner sends it as `x-gd-runner`.
+  string key = 2;
+}
+
+message ListRunnersRequest { string owner = 1; }
+message ListRunnersResponse { repeated Runner runners = 1; }
+message RemoveRunnerRequest {
+  string owner = 1;
+  string id = 2;
+}
+// verified (the default): GitHub's own and large vendors' actions at any tag, anyone else's only
+// pinned to a full commit SHA; all: any action; list: only `allowed` (`owner/repo` or `owner/*`).
+message ActionsPolicy {
+  string owner = 1;
+  string mode = 2;
+  repeated string allowed = 3;
+  // Actions used by tag (owner/repo@v4), each pinned to the commit its tag pointed at on first
+  // use: runs fetch exactly that commit, so a tag moved later can't swap in other code.
+  repeated ActionPin pins = 4;
+}
+
+message ActionPin {
+  // owner/repo@ref, as workflows name it.
+  string action = 1;
+  // The commit runs use.
+  string sha = 2;
+  int64 first_used_ms = 3;
+  // Where the tag points now, when that's no longer `sha`: runs refuse it until an administrator
+  // accepts the new commit.
+  string moved_to = 4;
+  int64 moved_at_ms = 5;
+}
+
+message AcceptActionPinRequest {
+  string owner = 1;
+  string action = 2;
+}
+
+message UpdateRunnerRequest {
+  string owner = 1;
+  string id = 2;
+  repeated string labels = 3;
+}
+
+message ClaimJobRequest {
+  uint32 wait_ms = 1;
+  // What the machine is: added to the runner's labels (`self-hosted`, `Linux`, `X64`,
+  // `ubuntu-latest`…).
+  repeated string machine_labels = 2;
+  string version = 3;
+  string os = 4;
+}
+message ClaimJobResponse {
+  // Absent when nothing came within `wait_ms`.
+  AssignedJob job = 1;
+}
+
+message AssignedJob {
+  uint64 id = 1;
+  RepositoryRef repository = 2;
+  uint64 run_number = 3;
+  // The server's address, for checkout and for gd.
+  string server = 4;
+  string ref = 5;
+  bytes changeset = 6;
+  // Fetch this with git when set (a real `.git`, the same commit ids); otherwise check out
+  // with gd.
+  string git_commit = 7;
+  // Read-only for this one repository, revoked when the job ends.
+  string token = 8;
+  // The planned job (grovedock-workflow's `Planned`), as JSON.
+  string job_json = 9;
+  // The `github` context, and `needs` (each needed job's result and outputs), as JSON.
+  string github_json = 10;
+  string needs_json = 11;
+  // Only for trusted runs.
+  map<string, string> secrets = 12;
+  uint32 timeout_minutes = 13;
+  // `${{ vars.NAME }}`: the organisation's, the repository's and the environment's, the
+  // narrowest winning.
+  map<string, string> vars = 14;
+  ActionsPolicy actions_policy = 15;
+}
+
+message StepReport {
+  uint32 index = 1;
+  RunState state = 2;
+  int64 started_at_ms = 3;
+  int64 finished_at_ms = 4;
+  uint64 log_offset = 5;
+  string name = 6;
+}
+
+message ReportJobRequest {
+  uint64 job_id = 1;
+  // Appended to the job's log.
+  bytes log = 2;
+  repeated StepReport steps = 3;
+  // Set once, when the job has finished.
+  RunState result = 4;
+  string failure = 5;
+  map<string, string> outputs = 6;
+  // Every annotation so far, and the summary so far; empty when unchanged since the last report.
+  repeated Annotation annotations = 7;
+  string summary = 8;
+}
+message ReportJobResponse { bool cancel = 1; }
+
+// Secrets and variables belong to a repository, to one of its environments, or (a repository
+// with an empty name) to the owner, for all its repositories.
+message SetSecretRequest {
+  RepositoryRef repository = 1;
+  // Letters, digits and _, not starting with a digit or GITHUB_ (`${{ secrets.NAME }}`).
+  string name = 2;
+  string value = 3;
+  string environment = 4;
+}
+message SecretRef {
+  RepositoryRef repository = 1;
+  string name = 2;
+  string environment = 3;
+}
+message Secret {
+  string name = 1;
+  string updated_by = 2;
+  int64 updated_at_ms = 3;
+  // Empty: the repository's (or the owner's) own.
+  string environment = 4;
+  // For an owner's secret: the repositories (and `repo (environment)`s) that set their own of
+  // the same name, so it doesn't reach them.
+  repeated string overridden_in = 5;
+}
+
+message SetVariableRequest {
+  RepositoryRef repository = 1;
+  string name = 2;
+  string value = 3;
+  string environment = 4;
+}
+message VariableRef {
+  RepositoryRef repository = 1;
+  string name = 2;
+  string environment = 3;
+}
+message Variable {
+  string name = 1;
+  string value = 2;
+  string environment = 3;
+  string updated_by = 4;
+  int64 updated_at_ms = 5;
+  // As for secrets: where an owner's variable is replaced by a repository's own.
+  repeated string overridden_in = 6;
+}
+message ListVariablesResponse {
+  repeated Variable variables = 1;
+  uint32 repositories = 2;
+}
+
+// Where a repository deploys. A job that names an environment waits for one of its reviewers
+// to approve it (none: it goes at once), and runs only from its branches (none: any).
+message Environment {
+  RepositoryRef repository = 1;
+  string name = 2;
+  repeated string reviewers = 3;
+  // Branch patterns, like `main` or `release/*`.
+  repeated string branches = 4;
+}
+message EnvironmentRef {
+  RepositoryRef repository = 1;
+  string name = 2;
+}
+message ListEnvironmentsResponse { repeated Environment environments = 1; }
+
+message ApproveDeploymentRequest {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  string environment = 3;
+}
+message ListSecretsResponse {
+  repeated Secret secrets = 1;
+  // For an owner: how many repositories it has (what an owner's secret can reach).
+  uint32 repositories = 2;
+}
+
+message ListWorkflowsRequest {
+  RepositoryRef repository = 1;
+  string ref = 2;
+}
+
+message WorkflowInput {
+  string name = 1;
+  string description = 2;
+  string default = 3;
+  bool required = 4;
+}
+
+message WorkflowJob {
+  string id = 1;
+  string name = 2;
+  repeated string needs = 3;
+  repeated string runs_on = 4;
+  // Matrix combinations; 1 for none.
+  uint32 combinations = 5;
+}
+
+message WorkflowInfo {
+  string file = 1;
+  string name = 2;
+  // What starts it, in Grovedock's words: push (with its branch and path filters), change_request,
+  // schedule (a cron line, UTC), manual.
+  repeated string triggers = 3;
+  bool manual = 4;
+  repeated WorkflowInput inputs = 5;
+  repeated WorkflowJob jobs = 6;
+  // Why the file can't be read; empty when it can.
+  string problem = 7;
+}
+
+message ListWorkflowsResponse {
+  repeated WorkflowInfo workflows = 1;
+  // The branch they were read from.
+  string ref = 2;
+}
+
+message RunnerReleaseRequest {
+  uint64 job_id = 1;
+  // Default: the tag the run is for.
+  string tag = 2;
+  string title = 3;
+  // Empty, or with `generate_notes`: notes written from what landed since the last release.
+  string body = 4;
+  bool draft = 5;
+  bool prerelease = 6;
+  bool generate_notes = 7;
+  // File names to attach (each gets an upload link).
+  repeated string files = 8;
+}
+
+message RunnerReleaseResponse {
+  string tag = 1;
+  repeated RunnerArtifactLink uploads = 2;
+  // True when the release already existed and files were added to it.
+  bool existed = 3;
+}

@@ -1,0 +1,19 @@
+[book]
+title = "Grovedock"
+description = "Documentation for Grovedock: an open protocol and reference server for source control at agent scale. One root. Thousands of agents."
+authors = ["Kabir Narang"]
+language = "en"
+src = "."
+
+[output.html]
+site-url = "/docs/"
+git-repository-url = "https://github.com/grovedock/gd"
+edit-url-template = "https://github.com/grovedock/gd/edit/main/docs/{path}"
+additional-css = ["theme/gd.css"]
+additional-js = ["theme/gd.js"]
+default-theme = "light"
+preferred-dark-theme = "navy"
+no-section-label = true
+
+[output.html.search]
+enable = true

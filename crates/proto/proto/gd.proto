@@ -1,0 +1,339 @@
+syntax = "proto3";
+
+// Grovedock wire protocol. Every object request names an immutable, content-addressed
+// object, so any tier (server, regional cache, node daemon) can answer it.
+package gd.v1;
+
+message Empty {}
+message IdMsg { bytes id = 1; }
+message IdList { repeated bytes ids = 1; }
+
+// Object payload exactly as stored: 1 kind byte followed by zstd-compressed content.
+// Receivers verify id == blake3(kind || content) before trusting it.
+message ObjectPayload {
+  bytes id = 1;
+  bytes payload = 2;
+}
+message PutObjectsResponse { uint32 stored = 1; }
+
+// Tier-agnostic object service. Served identically by server, cache and daemon.
+service Objects {
+  rpc Get(IdList) returns (stream ObjectPayload);
+  rpc Put(stream ObjectPayload) returns (PutObjectsResponse);
+  // Returns the subset of ids the tier cannot serve.
+  rpc Missing(IdList) returns (IdList);
+}
+
+message FileChange {
+  string path = 1;
+  bytes blob = 2; // empty => delete
+  int32 mode = 3;
+}
+
+message ChangesetInfo {
+  bytes id = 1;
+  bytes root_tree = 2;
+  uint64 generation = 3;
+  // Canonical changeset encoding; clients may re-hash it to verify `id`.
+  bytes encoded = 4;
+  // Changes outside the caller's read scope were removed, so `encoded` no longer hashes
+  // to `id` and cannot be verified by the client.
+  bool redacted = 5;
+  // Who uploaded it, as this server recorded it; absent for changes from before this was kept.
+  Provenance provenance = 6;
+}
+
+// Who made a change: the signed-in account that uploaded it (not what the change says about
+// itself), and what an agent declared when it did. Kept beside the change, not in its message.
+message Provenance {
+  string by = 1;
+  bool agent = 2;
+  string model = 3;
+  string session = 4;
+  // The issue it's for, 0 if none.
+  uint64 task = 5;
+  int64 at_ms = 6;
+}
+
+message CreateChangesetRequest {
+  repeated bytes parents = 1;
+  repeated FileChange changes = 2;
+  string author = 3;
+  string message = 4;
+  int64 timestamp_ms = 5;
+  // An encoded gd.objects.v1.GitOrigin, for a change that came from git (imports, git pushes).
+  bytes git = 6;
+  // An agent's own account of itself, recorded in the change's provenance: the model, its
+  // session (conversation) id, and the issue it's working on.
+  string model = 7;
+  string session = 8;
+  uint64 task = 9;
+}
+
+message ResolveRequest { string rev = 1; }
+
+service Changesets {
+  rpc Create(CreateChangesetRequest) returns (ChangesetInfo);
+  rpc Get(ResolveRequest) returns (ChangesetInfo);
+}
+
+message RefName { string name = 1; }
+message RefValue { bool exists = 1; bytes id = 2; }
+message CasRequest {
+  string name = 1;
+  bool expect_exists = 2;
+  bytes expected = 3;
+  bytes new = 4;
+}
+message CasResponse { bool swapped = 1; }
+message RefEntry { string name = 1; bytes id = 2; }
+message RefList { repeated RefEntry refs = 1; }
+
+// Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+// (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+// lands on one. Git sees them as refs/tags/*.
+service Refs {
+  rpc Get(RefName) returns (RefValue);
+  rpc CompareAndSwap(CasRequest) returns (CasResponse);
+  rpc List(Empty) returns (RefList);
+}
+
+message LandRequest {
+  string ref = 1;
+  bytes changeset = 2;
+  // As git pushes: the ref moves to the changeset as it is, only if the ref's head is one of
+  // its ancestors (or the ref doesn't exist); every changeset it brings is checked as a land
+  // would be. Nothing is rebased; otherwise refused ("fetch first").
+  bool fast_forward = 3;
+}
+message LandResponse {
+  bytes landed = 1;
+  bool rebased = 2;
+  uint32 attempts = 3;
+}
+
+// Server-side rebase + lock-free compare-and-swap of a ref.
+service Land {
+  rpc Land(LandRequest) returns (LandResponse);
+}
+
+message LogRequest {
+  string rev = 1;
+  string path = 2;
+  uint32 limit = 3;
+}
+
+message BlameRequest {
+  string rev = 1;
+  string path = 2;
+}
+message BlameLine {
+  // Changeset that last changed this line.
+  bytes changeset = 1;
+  string text = 2;
+  // The line's number (1-based) in that changeset's version of the file.
+  uint32 origin_line = 3;
+  // Who wrote it: a key into BlameResponse.authors. Empty when nothing is known beyond the
+  // changeset's author, which is not a claim that a person wrote it.
+  string by = 4;
+}
+message LineAuthor {
+  bool agent = 1;
+  // An account (asha, agent/acme-bot), or for git-ai notes the tool (claude_code, cursor) or the
+  // person ("Asha Rao <asha@acme.test>").
+  string name = 2;
+  string model = 3;
+  // For an agent: the person it worked for, when known.
+  string person = 4;
+  // "grovedock" (recorded by this server) or "git-ai" (from the source repository's notes).
+  string source = 5;
+}
+message BlameResponse {
+  repeated BlameLine lines = 1;
+  map<string, LineAuthor> authors = 2;
+}
+
+// A git-ai authorship note (refs/notes/ai, authorship/3.x) for a change that came from git.
+message AttachGitAiNoteRequest {
+  bytes changeset = 1;
+  string note = 2;
+}
+
+service History {
+  rpc Log(LogRequest) returns (stream ChangesetInfo);
+  rpc Blame(BlameRequest) returns (BlameResponse);
+  // Keeps which lines of an imported change an agent wrote. Only for changes that came from
+  // git (their notes are the source repository's claim); needs write access.
+  rpc AttachGitAiNote(AttachGitAiNoteRequest) returns (Empty);
+  // The git-ai note kept with a change that came from git; empty when there is none.
+  rpc GitAiNote(IdMsg) returns (GitAiNoteResponse);
+}
+
+message GitAiNoteResponse { string note = 1; }
+
+message DiffRequest {
+  string from = 1;
+  string to = 2;
+}
+message DiffResponse { repeated FileChange changes = 1; }
+
+service Diff {
+  rpc Diff(DiffRequest) returns (DiffResponse);
+}
+
+message MergeBaseRequest {
+  string a = 1;
+  string b = 2;
+}
+message MergeBaseResponse { bool found = 1; bytes id = 2; }
+
+service MergeBase {
+  rpc MergeBase(MergeBaseRequest) returns (MergeBaseResponse);
+}
+
+message BrowseRequest {
+  string rev = 1;
+  string path = 2;
+}
+message DirEntry {
+  string name = 1;
+  int32 mode = 2;
+  bytes id = 3;
+}
+message ListDirResponse { repeated DirEntry entries = 1; }
+message ReadFileResponse { bytes content = 1; int32 mode = 2; bytes id = 3; }
+
+message FindRequest {
+  string rev = 1;
+  // Case-sensitive substring matched against full repo paths.
+  string pattern = 2;
+  uint32 limit = 3;
+}
+message FindResponse {
+  repeated string paths = 1;
+  bool truncated = 2;
+}
+
+message CheckoutRequest {
+  string rev = 1;
+  // Paths (files or directories) to materialise; empty = everything readable.
+  repeated string paths = 2;
+}
+// Files are streamed in pieces of at most 4 MiB; every piece names its file, and the
+// last piece of a file has `last` set. Clients verify each file's content against `id`.
+message CheckoutPiece {
+  string path = 1;
+  int32 mode = 2;
+  bytes id = 3;
+  bytes data = 4;
+  bool last = 5;
+}
+
+// API-first file access: CI and tools read source without any checkout.
+// Code search over a branch: text (every term, 3 characters or more, case-insensitive) and
+// symbol definitions. Servers index a branch the first time it's searched and keep the index
+// up to date as it moves; results only include files the caller may read.
+message SearchCodeRequest {
+  // Words or "quoted phrases", all of which a file must contain, plus `path:dir/` and
+  // `-path:dir/` to narrow by path and `lang:rs` by language.
+  string query = 1;
+  // The branch; empty: main.
+  string ref = 2;
+  // Files per page (default 20, at most 100).
+  uint32 limit = 3;
+  string page_token = 4;
+}
+
+message CodeLine {
+  uint32 line = 1;
+  string text = 2;
+  // Where the terms are in `text`: start, end pairs in characters.
+  repeated uint32 ranges = 3;
+}
+
+message CodeHit {
+  string path = 1;
+  repeated CodeLine lines = 2;
+  // Matching lines not shown.
+  uint32 more = 3;
+}
+
+message SearchCodeResponse {
+  repeated CodeHit hits = 1;
+  // Files that match, up to 5,000.
+  uint32 files = 2;
+  string next_page_token = 3;
+  // The changeset the index is at, and whether the branch has moved past it (the index is
+  // catching up).
+  bytes indexed_at = 4;
+  bool catching_up = 5;
+}
+
+message FindSymbolRequest {
+  // The name, or its start.
+  string name = 1;
+  string ref = 2;
+  uint32 limit = 3;
+}
+
+message SymbolHit {
+  string name = 1;
+  // fn, struct, class, interface, type, def, …
+  string kind = 2;
+  string path = 3;
+  uint32 line = 4;
+  // The line that defines it.
+  string text = 5;
+}
+
+message FindSymbolResponse {
+  repeated SymbolHit symbols = 1;
+  bytes indexed_at = 2;
+  bool catching_up = 3;
+}
+
+service CodeSearch {
+  rpc SearchCode(SearchCodeRequest) returns (SearchCodeResponse);
+  rpc FindSymbol(FindSymbolRequest) returns (FindSymbolResponse);
+}
+
+service Browse {
+  rpc ListDir(BrowseRequest) returns (ListDirResponse);
+  rpc ReadFile(BrowseRequest) returns (ReadFileResponse);
+  rpc Find(FindRequest) returns (FindResponse);
+  // Path-scoped checkout: only files the caller may read. Used by principals with
+  // restricted read access, who may not read objects by id.
+  rpc Checkout(CheckoutRequest) returns (stream CheckoutPiece);
+}
+
+message WhoAmIResponse {
+  string principal = 1;
+  bool full_read = 2;
+  repeated string read_prefixes = 3;
+}
+
+service Access {
+  rpc WhoAmI(Empty) returns (WhoAmIResponse);
+}
+
+// Exclusive locks on files that cannot be merged (art, models, video, binaries). A lock
+// does not block reads; landing a change to a path someone else has locked is refused.
+message LockRequest { string path = 1; }
+message UnlockRequest {
+  string path = 1;
+  // Release another person's lock (needs write access to the path).
+  bool force = 2;
+}
+message ListLocksRequest { string prefix = 1; }
+message LockInfo {
+  string path = 1;
+  string owner = 2;
+  int64 locked_at_ms = 3;
+}
+message LockList { repeated LockInfo locks = 1; }
+
+service Locks {
+  rpc Lock(LockRequest) returns (LockInfo);
+  rpc Unlock(UnlockRequest) returns (Empty);
+  rpc List(ListLocksRequest) returns (LockList);
+}

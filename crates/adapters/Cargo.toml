@@ -1,0 +1,39 @@
+[package]
+name = "grovedock-adapters"
+description = "Grovedock infrastructure adapters: memory, SQLite, Postgres, S3/GCS/Azure/local object storage, caches, gRPC upstream tiers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["sqlite", "postgres", "cloud"]
+sqlite = ["dep:rusqlite"]
+postgres = ["dep:sqlx"]
+cloud = ["object_store/aws", "object_store/gcp", "object_store/azure"]
+
+[dependencies]
+grovedock-core.workspace = true
+grovedock-proto.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+futures.workspace = true
+object_store.workspace = true
+quick_cache.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rusqlite = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+sqlx.workspace = true
+tempfile.workspace = true

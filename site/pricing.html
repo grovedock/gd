@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing: {{NAME}}</title>
+<meta name="description" content="{{NAME}} is free for up to {{FREE_PEOPLE}} people and {{FREE_AGENTS}} active agents. Team is priced per person and per active agent, billed in rupees, with idle agents free.">
+<link rel="canonical" href="{{SITE_URL}}pricing.html">
+<link rel="icon" href="mark.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/schibsted-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="site.css">
+<style>
+  .head { padding-block: clamp(2.5rem, 7vw, 5rem) clamp(5rem, 10vw, 7.5rem); }
+  .head h1 { font-size: clamp(2.75rem, 6.4vw, 5rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; margin: 0 0 1.25rem; }
+  .head > p { font-size: clamp(1.1rem, 1.5vw, 1.3rem); color: var(--muted); margin: 0; max-width: 34rem; }
+  .promises { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; margin-top: 2.5rem; max-width: 50rem; }
+  .promises p { margin: 0; padding-left: 1rem; border-left: 2px solid var(--gold); color: var(--muted); }
+  .promises strong { color: var(--ink); }
+  .tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: clamp(-4rem, -7vw, -3rem); position: relative; overflow: hidden; }
+  .tier { padding: clamp(1.4rem, 2.5vw, 2rem); display: flex; flex-direction: column; }
+  .tier + .tier { border-left: 1px solid var(--rule); }
+  .tier.team { background: color-mix(in srgb, var(--gd) 6%, var(--raised)); box-shadow: inset 0 3px 0 var(--gd); }
+  .tier h2 { font-size: 1.2rem; margin: 0 0 0.2rem; }
+  .tier .tag { font-size: 0.85rem; color: var(--muted); margin: 0 0 1.5rem; }
+  .price { font-size: 0.92rem; line-height: 1.5; margin: 0 0 0.5rem; color: var(--muted); }
+  .price b { font-size: 2.25rem; font-weight: 750; letter-spacing: -0.03em; color: var(--ink); }
+  .tier ul { list-style: none; padding: 1.25rem 0 0; margin: 1.25rem 0 1.75rem; border-top: 1px solid var(--rule); flex: 1; font-size: 0.95rem; }
+  .tier li { margin-bottom: 0.55rem; padding-left: 1.4rem; position: relative; }
+  .tier li::before { content: ""; position: absolute; left: 0.15rem; top: 0.55em; width: 0.5rem; height: 0.28rem; border: solid var(--gd); border-width: 0 0 2px 2px; transform: rotate(-45deg); }
+  .tier .btn { justify-content: center; }
+  .tier .btn.line { color: var(--ink); }
+  .support { margin-top: 1.25rem; padding: 1.1rem 1.4rem; border-radius: var(--r-md); background: var(--sunken); }
+  .support p { margin: 0; max-width: none; }
+
+  .calc { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem 3rem; align-items: start; }
+  .calc label { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 0.5rem; }
+  .calc output { font-weight: 400; }
+  .calc input[type=range] { width: 100%; accent-color: var(--gd); margin: 0 0 1.6rem; }
+  .total { padding: 1.5rem 1.6rem; }
+  .total p { margin: 0 0 0.3rem; }
+  .total .big { font-weight: 800; font-size: clamp(2.25rem, 4.5vw, 3rem); letter-spacing: -0.035em; line-height: 1.15; margin: 0.25rem 0 0.75rem; }
+  details { border-top: 1px solid var(--rule); max-width: 46rem; }
+  details:last-child { border-bottom: 1px solid var(--rule); }
+  summary { cursor: pointer; font-weight: 600; padding: 1.1rem 2rem 1.1rem 0; list-style: none; position: relative; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: ""; position: absolute; right: 0.4rem; top: 1.45rem; width: 0.5rem; height: 0.5rem; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform 0.15s; }
+  details[open] summary::after { transform: rotate(-135deg); top: 1.65rem; }
+  details p { margin: 0 0 1.2rem; color: var(--muted); }
+  @media (max-width: 1000px) {
+    .tiers { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tier:nth-child(3) { border-left: 0; }
+    .tier:nth-child(n+3) { border-top: 1px solid var(--rule); }
+  }
+  @media (max-width: 620px) {
+    .tiers, .promises, .calc { grid-template-columns: 1fr; }
+    .tier + .tier { border-left: 0; border-top: 1px solid var(--rule); }
+  }
+  @media (prefers-reduced-motion: reduce) { summary::after { transition: none; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="band">
+<header class="wrap top">
+  <a class="brand" href="./"><img src="mark.svg" alt="" width="30" height="30">{{NAME}}</a>
+  <nav aria-label="Main">
+    <a href="docs/">Docs</a>
+    <a class="wide" href="docs/comparisons/git-vs-gd.html">Benchmarks</a>
+    <a href="pricing.html" aria-current="page">Pricing</a>
+    <a href="{{CLOUD_URL}}">Sign in</a>
+  </nav>
+</header>
+<div class="wrap head">
+  <h1>Agents priced as agents.</h1>
+  <p>Start free. Team is priced per person and per active agent, and every plan lands at full speed.</p>
+  <div class="promises">
+    <p><strong>Your code stays in India.</strong> On servers in Mumbai, and never used to train AI.</p>
+    <p><strong>Idle agents are free.</strong> You pay for an agent only in a month it lands a change.</p>
+  </div>
+</div>
+</div>
+
+<main id="main">
+<div class="wrap">
+  <div class="tiers panel">
+    <section class="tier" aria-labelledby="t-free">
+      <h2 id="t-free">Free</h2>
+      <p class="tag">For individuals and small teams</p>
+      <p class="price"><b>₹0</b><br>forever</p>
+      <ul>
+        <li>{{FREE_PEOPLE}} people, {{FREE_AGENTS}} active agents a month</li>
+        <li>Unlimited public repositories, {{FREE_PRIVATE_REPOS}} private</li>
+        <li>{{FREE_STORAGE}} storage</li>
+        <li>Reviews, issues, protected branches, webhooks, MCP</li>
+        <li>{{FREE_RATE}} calls a minute per person or agent</li>
+      </ul>
+      <a class="btn line" href="{{CLOUD_URL}}">Start free</a>
+    </section>
+    <section class="tier team" aria-labelledby="t-team">
+      <h2 id="t-team">Team</h2>
+      <p class="tag">For teams running agent fleets</p>
+      <p class="price"><b>₹{{TEAM_PERSON_ANNUAL}}</b> per person<br><b>₹{{TEAM_AGENT_ANNUAL}}</b> per active agent</p>
+      <p class="small muted">Per month, billed annually. Billed monthly: ₹{{TEAM_PERSON_MONTHLY}} and ₹{{TEAM_AGENT_MONTHLY}}.</p>
+      <ul>
+        <li>As many people and agents as you need</li>
+        <li>Unlimited private repositories</li>
+        <li>{{TEAM_STORAGE}} storage</li>
+        <li>{{TEAM_RATE}} calls a minute per person or agent</li>
+        <li>Idle agents are free</li>
+      </ul>
+      <a class="btn" href="{{CLOUD_URL}}">Start with Team</a>
+    </section>
+    <section class="tier" aria-labelledby="t-ent">
+      <h2 id="t-ent">Enterprise</h2>
+      <p class="tag">On your own servers</p>
+      <p class="price"><b>₹{{SUPPORT_FOUNDING}}</b> a year<br><span class="small muted">founding price, then ₹{{SUPPORT_YEAR}}</span></p>
+      <ul>
+        <li>{{NAME}} on your hardware, behind your firewall</li>
+        <li>Your own single sign-on (Okta, Entra ID, Keycloak and others)</li>
+        <li>Support and upgrades, by contract and invoice</li>
+        <li>Founding price for the first {{SUPPORT_FOUNDING_CUSTOMERS}} customers</li>
+      </ul>
+      <a class="btn line" href="docs/legal/contact.html">Talk to us</a>
+    </section>
+  </div>
+</div>
+
+<section class="wrap sec" aria-labelledby="calc">
+  <h2 id="calc">What Team costs you</h2>
+  <form class="calc" data-agent="{{TEAM_AGENT_ANNUAL}}" data-person="{{TEAM_PERSON_ANNUAL}}" data-agent-monthly="{{TEAM_AGENT_MONTHLY}}" data-person-monthly="{{TEAM_PERSON_MONTHLY}}" data-free-people="{{FREE_PEOPLE}}" data-free-agents="{{FREE_AGENTS}}">
+    <div>
+      <label for="people">People <output for="people" id="people-out" class="num">5</output></label>
+      <input type="range" id="people" min="1" max="100" value="5">
+      <label for="agents">Active agents a month <output for="agents" id="agents-out" class="num">20</output></label>
+      <input type="range" id="agents" min="0" max="500" step="5" value="20">
+      <p class="small muted">Count only agents that land at least one change in the month.</p>
+    </div>
+    <div class="total panel" aria-live="polite">
+      <p>Team, per month, billed annually</p>
+      <p class="big" id="annual">&nbsp;</p>
+      <p class="small muted" id="monthly">&nbsp;</p>
+      <p class="small muted" id="fit">&nbsp;</p>
+    </div>
+  </form>
+</section>
+
+<section class="wrap sec" aria-labelledby="faq">
+  <h2 id="faq">Questions</h2>
+  <div>
+    <details>
+      <summary>What is an active agent?</summary>
+      <p>An agent account (<code>agent/NAME</code> or <code>bot/NAME</code>) that lands at least one change in your organisation during a calendar month: a land, a compare-and-swap that moves a branch, or a change request it wrote or landed. Refused lands don't count, and people are never agents. An agent that lands nothing that month costs nothing.</p>
+    </details>
+    <details>
+      <summary>Is there a limit on lands?</summary>
+      <p>Fair use is {{FAIR_USE_LANDS}} lands per paid agent per month. Going past it starts a conversation with us, never an automatic charge.</p>
+    </details>
+    <details>
+      <summary>What happens when we reach a plan limit?</summary>
+      <p>A new agent's land is refused with a message saying so; agents already active that month keep landing. Over the storage limit, writes are refused and reads keep working. Adding a person beyond the plan is refused. Nothing is ever deleted.</p>
+    </details>
+    <details>
+      <summary>How do people sign in?</summary>
+      <p>With Google or an email link, on every plan. Your own single sign-on (Okta, Entra ID, Keycloak or any OpenID Connect provider) comes with Enterprise.</p>
+    </details>
+    <details>
+      <summary>Where is {{NAME}} available?</summary>
+      <p>Anyone can sign up for Free. Team is paid in rupees through Razorpay, by UPI, card or netbanking, and your data is kept in India. Outside India, write to us for Enterprise by invoice.</p>
+    </details>
+    <details>
+      <summary>Can we leave?</summary>
+      <p>Any time. <code>gd export-git</code> writes your history to git with identical trees, and the gd protocol and CLI are open source. Cancelling Team keeps your data; the organisation moves to Free.</p>
+    </details>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <a class="brand" href="./"><img src="mark.svg" alt="" width="26" height="26">{{NAME}}</a>
+        <p>A grove is many trees on one root, like many agents on one history; a dock is where their changes land.</p>
+      </div>
+      <nav aria-labelledby="f-product"><h2 id="f-product">Product</h2>
+        <a href="docs/">Docs</a>
+        <a href="docs/getting-started.html">Get started</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="{{REPO}}">gd on GitHub</a>
+        <a href="{{CLOUD_URL}}">Sign in</a>
+      </nav>
+      <nav aria-labelledby="f-company"><h2 id="f-company">Trust</h2>
+        <a href="docs/security-policy.html">Security policy</a>
+        <a href="docs/legal/terms.html">Terms</a>
+        <a href="docs/legal/privacy.html">Privacy</a>
+        <a href="docs/legal/refunds.html">Refunds and cancellation</a>
+        <a href="docs/legal/contact.html">Contact</a>
+      </nav>
+    </div>
+    <div class="fine">
+      <p>List prices in Indian rupees, excluding GST.</p>
+      <p>gd, its CLI and SDKs are Apache-2.0. {{NAME}} © 2026 Kabir Narang.</p>
+    </div>
+  </div>
+</footer>
+<script>
+(() => {
+  const f = document.querySelector(".calc"), d = f.dataset, $ = (id) => document.getElementById(id);
+  const inr = (n) => "₹" + n.toLocaleString("en-IN");
+  function update() {
+    const p = +$("people").value, a = +$("agents").value;
+    $("people-out").value = p;
+    $("agents-out").value = a;
+    $("annual").textContent = inr(a * d.agent + p * d.person);
+    $("monthly").textContent = `Billed monthly: ${inr(a * d.agentMonthly + p * d.personMonthly)} a month.`;
+    $("fit").textContent = p <= +d.freePeople && a <= +d.freeAgents ? "This fits Free." : " ";
+  }
+  f.addEventListener("input", update);
+  update();
+})();
+</script>
+</body>
+</html>

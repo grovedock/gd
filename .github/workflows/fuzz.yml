@@ -1,0 +1,42 @@
+name: Fuzz
+
+# Coverage-guided fuzzing (cargo-fuzz / libFuzzer) of every decoder that reads untrusted
+# bytes: objects, trees, changesets, chunk manifests, deltas and paths. Ten minutes per
+# target nightly; one minute per target on pull requests that touch the decoders.
+on:
+  schedule:
+    - cron: "13 3 * * *"
+  pull_request:
+    paths: ["fuzz/**", "crates/core/**", ".github/workflows/fuzz.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [object, tree, changeset, manifest, delta, path]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # nightly
+        with: { toolchain: nightly }
+      - uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2
+        with: { tool: cargo-fuzz }
+      - name: Fuzz ${{ matrix.target }}
+        run: |
+          secs=$([ "${{ github.event_name }}" = pull_request ] && echo 60 || echo 600)
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          cp fuzz/seeds/${{ matrix.target }}/* fuzz/corpus/${{ matrix.target }}/
+          # cargo-fuzz may be a musl build, which would default to a musl target ASan cannot use.
+          cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} fuzz/corpus/${{ matrix.target }} -- -max_total_time=$secs -rss_limit_mb=2048
+      - name: Keep the crashing input
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: fuzz-${{ matrix.target }}
+          path: fuzz/artifacts/

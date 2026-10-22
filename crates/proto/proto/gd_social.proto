@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+// People and the public: stars, watching, people's pages and Explore. Kept apart from
+// gd_platform.proto so clients load it when first used.
+package gd.v1;
+
+import "gd_platform.proto";
+
+service Social {
+  // A person's page. Anyone may look; it shows only what the viewer can read.
+  rpc GetProfile(OrgName) returns (Profile);
+  // Your name and bio.
+  rpc SetProfile(SetProfileRequest) returns (Profile);
+  // Star a repository you can read, or take the star back. People only.
+  rpc SetStar(SetStarRequest) returns (Repository);
+  // How much of a repository's news reaches you.
+  rpc SetWatch(SetWatchRequest) returns (Repository);
+  // A person's starred repositories, newest star first.
+  rpc ListStarred(ListStarredRequest) returns (ListRepositoriesResponse);
+  // Public repositories, for anyone, signed in or not.
+  rpc Explore(ExploreRequest) returns (ExploreResponse);
+  // A copy of a repository you can read, in an organisation where you may make repositories:
+  // every branch and tag, sharing the source's history rather than copying it. A private
+  // repository's forks stay in its organisation and private.
+  rpc ForkRepository(ForkRequest) returns (Repository);
+  // Forks of a repository that the caller can read.
+  rpc ListForks(RepositoryRef) returns (ListRepositoriesResponse);
+  // How a fork's default branch stands against its source's: changes ahead and behind.
+  rpc CompareFork(RepositoryRef) returns (ForkStatus);
+  // Brings the source's new work into a fork's default branch: at once when the fork has
+  // nothing of its own on it, else as a change request in the fork (both sides changed, so a
+  // person looks). Takes Write on the fork.
+  rpc UpdateFork(RepositoryRef) returns (ForkStatus);
+}
+
+message ForkStatus {
+  // The source, when the caller can read it (empty otherwise: then nothing else is said).
+  RepositoryRef source = 1;
+  string branch = 2;
+  string source_branch = 3;
+  // Changes on the fork's branch the source's lacks, and the other way round (capped at 1000).
+  uint32 ahead = 4;
+  uint32 behind = 5;
+  // From UpdateFork: the change request it opened when both sides had changed.
+  uint64 change_request = 6;
+}
+
+message ForkRequest {
+  string owner = 1;
+  string name = 2;
+  // Where the fork goes; its name defaults to the source's.
+  string into_owner = 3;
+  string into_name = 4;
+  // Unspecified: the source's. Never more open than the source.
+  Visibility visibility = 5;
+}
+
+// A person's page: who they are, and what of their work the viewer can read.
+message Profile {
+  Account account = 1;
+  string bio = 2;
+  // Organisations both the viewer and this person are in (all of them, on your own page):
+  // membership isn't public.
+  repeated Organization organizations = 3;
+  // Agents this person answers for that have worked where the viewer can read in the last 30
+  // days (all of them, on your own page).
+  repeated ProfileAgent agents = 4;
+  // Contributions per day for the last 365 days, oldest first, the last being today (UTC):
+  // lands, change requests, reviews, comments, issues and releases, where the viewer can read.
+  repeated uint32 days = 5;
+  // Starred repositories the viewer can read.
+  uint32 stars = 6;
+  // The same 365 days for the agents this person answers for, together.
+  repeated uint32 agent_days = 7;
+  // The year's contributions by kind, most first.
+  repeated KindCount kinds = 8;
+  // Where the year's contributions went, most first (up to 6).
+  repeated RepositoryCount repositories = 9;
+  // The person keeps their activity to themselves: others see only who they are (name, bio,
+  // when they joined), and everything above about their work is left empty.
+  bool private_activity = 10;
+}
+
+message KindCount {
+  EventKind kind = 1;
+  uint32 count = 2;
+}
+
+message RepositoryCount {
+  RepositoryRef repository = 1;
+  uint32 count = 2;
+}
+
+message ProfileAgent {
+  Account account = 1;
+  // Lands, and everything it did, in the last 30 days where the viewer can read.
+  uint32 lands_30d = 2;
+  uint32 actions_30d = 3;
+  int64 last_active_ms = 4;
+  // Actions per day for those 30 days, oldest first.
+  repeated uint32 days = 5;
+}
+
+message SetProfileRequest {
+  string display_name = 1;
+  // Up to 160 characters, plain text.
+  string bio = 2;
+  bool private_activity = 3;
+}
+
+message SetStarRequest {
+  string owner = 1;
+  string name = 2;
+  bool starred = 3;
+}
+
+message SetWatchRequest {
+  string owner = 1;
+  string name = 2;
+  Watch watch = 3;
+}
+
+message ListStarredRequest {
+  // Whose stars; empty for the caller's. Only repositories the caller can read are listed.
+  string login = 1;
+}
+
+// Public repositories, for anyone: what's busy this week, who did the work, and the topics.
+message ExploreRequest {
+  // Only repositories with this topic.
+  string topic = 1;
+  uint32 limit = 2;
+  // Words in the name or description.
+  string query = 3;
+  ExploreSort sort = 4;
+  ExploreDoneBy done_by = 5;
+  string page_token = 6;
+}
+
+enum ExploreSort {
+  // New stars count three times a land.
+  EXPLORE_SORT_BUSIEST = 0;
+  EXPLORE_SORT_STARS = 1;
+  EXPLORE_SORT_NEWEST = 2;
+  EXPLORE_SORT_RECENTLY_LANDED = 3;
+}
+
+// Who landed most of the week's work.
+enum ExploreDoneBy {
+  EXPLORE_DONE_BY_ANYONE = 0;
+  EXPLORE_DONE_BY_AGENTS = 1;
+  EXPLORE_DONE_BY_PEOPLE = 2;
+}
+
+message ExploreRepository {
+  Repository repository = 1;
+  // In the last 7 days: new stars, and lands (direct or by change request), of which agents'.
+  uint32 stars_7d = 2;
+  uint32 lands_7d = 3;
+  uint32 agent_lands_7d = 4;
+  // Lands per day for those 7 days, oldest first, the last being today (UTC).
+  repeated uint32 people_days = 5;
+  repeated uint32 agent_days = 6;
+}
+
+message TopicCount {
+  string topic = 1;
+  uint32 repositories = 2;
+}
+
+// Someone who landed public work this week.
+message ExploreActor {
+  string login = 1;
+  string display_name = 2;
+  uint32 lands = 3;
+  uint32 repositories = 4;
+}
+
+// All public work this week.
+message ExploreWeek {
+  repeated uint32 people_days = 1;
+  repeated uint32 agent_days = 2;
+  uint32 repositories = 3;
+  uint32 people = 4;
+  uint32 agents = 5;
+  uint32 stars = 6;
+}
+
+message ExploreResponse {
+  // Matching repositories in the order asked for, a page at a time.
+  repeated ExploreRepository repositories = 1;
+  string next_page_token = 2;
+  // How many match, over every page.
+  uint32 total = 3;
+  // Topics on public repositories, most used first.
+  repeated TopicCount topics = 4;
+  ExploreWeek week = 5;
+  // The week's busiest, by public lands (up to 5 each).
+  repeated ExploreActor agents = 6;
+  repeated ExploreActor people = 7;
+}

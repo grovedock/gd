@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+// The review packet: what a reviewer should look at in a change request, worked out by the
+// server from its diff and its author's record. Weakening CI (deleting or switching off tests,
+// letting CI failures through) needs a person's approval, whoever wrote the change. Kept apart
+// so clients load it when first used.
+package gd.v1;
+
+import "gd_platform.proto";
+
+service Packets {
+  rpc GetReviewPacket(ChangeRequestRef) returns (ReviewPacket);
+  // Open change requests the caller can decide on (they can write to the repository and didn't
+  // write it themselves; their own agents' are included), riskiest first, each with why;
+  // `batchable` ones can be approved together.
+  rpc ListReviewQueue(ReviewQueueRequest) returns (ReviewQueue);
+  // Who else is changing any of these paths (a folder covers what's inside it): open change
+  // requests and file locks. Asked before starting work, so parallel agents don't collide.
+  rpc ListOverlaps(OverlapsRequest) returns (Overlaps);
+}
+
+message OverlapsRequest {
+  RepositoryRef repository = 1;
+  repeated string paths = 2;
+  // Leave this change request out (the one asking).
+  uint64 except = 3;
+}
+
+message Overlap {
+  // The path asked about, and the path the other work touches.
+  string path = 1;
+  string theirs = 2;
+  // change_request or lock.
+  string kind = 3;
+  string who = 4;
+  // The change request's number and title, for change_request.
+  uint64 number = 5;
+  string title = 6;
+  int64 since_ms = 7;
+}
+
+message Overlaps { repeated Overlap items = 1; }
+
+message ReviewQueueRequest {
+  // Only this owner's repositories; empty: every repository the caller can write to.
+  string owner = 1;
+}
+
+message ReviewQueueItem {
+  ChangeRequest change_request = 1;
+  // high, medium or low.
+  string risk = 2;
+  // Why, most serious first ("Removes 2 tests", "Edits a workflow file", "CI failing").
+  repeated string reasons = 3;
+  bool agent = 4;
+  // The caller was asked to review it.
+  bool requested = 5;
+  // Low risk, checks passed, and nothing but an approval stands in the way (for the caller's own
+  // agents, nothing at all: their owner's approval doesn't count towards required approvals).
+  bool batchable = 6;
+  // Written by one of the caller's own agents.
+  bool own_agent = 7;
+}
+
+message ReviewQueue { repeated ReviewQueueItem items = 1; }
+
+message PacketFinding {
+  // weakens_ci, silenced, workflow, size, stopped
+  string kind = 1;
+  string text = 2;
+  string path = 3;
+  // In the new version of the file; 0 for the whole file.
+  uint32 line = 4;
+  // Needs a person's approval before it can land.
+  bool blocks = 5;
+}
+
+// The author's last 30 days in this repository.
+message AuthorRecord {
+  bool agent = 1;
+  // An agent's owner.
+  string answers_to = 2;
+  uint32 landed = 3;
+  uint32 refused = 4;
+  uint32 changes_requested = 5;
+}
+
+message ReviewPacket {
+  repeated PacketFinding findings = 1;
+  uint32 tests_added = 2;
+  uint32 tests_removed = 3;
+  AuthorRecord author = 4;
+  uint32 files = 5;
+  uint32 additions = 6;
+  uint32 deletions = 7;
+}

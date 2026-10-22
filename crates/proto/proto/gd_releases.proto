@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+// Releases: a tag with notes and files. Kept apart from gd_platform.proto so clients load
+// them when first used.
+package gd.v1;
+
+import "gd.proto";
+import "gd_platform.proto";
+
+// A release: a tag, with notes and files, public once it's no longer a draft. The tag is
+// made once and never moves, so a release always names exactly what was released.
+message Release {
+  RepositoryRef repository = 1;
+  // The tag, without `tags/`: v1.2.0.
+  string tag = 2;
+  string title = 3;
+  // Notes, in Markdown.
+  string body = 4;
+  bool draft = 5;
+  bool prerelease = 6;
+  // The newest published release that isn't a pre-release.
+  bool latest = 7;
+  string author = 8;
+  int64 created_at_ms = 9;
+  // 0 while it's a draft.
+  int64 published_at_ms = 10;
+  // The changeset the tag names.
+  bytes changeset = 11;
+  repeated ReleaseAsset assets = 12;
+}
+
+// A file attached to a release: its content is an object in the repository's store (upload it
+// first, as any file), so it is checked by its id and stored once however often it's attached.
+message ReleaseAsset {
+  string name = 1;
+  bytes blob = 2;
+  uint64 size = 3;
+  string content_type = 4;
+  string uploaded_by = 5;
+  // Hex SHA-256 of the content, worked out by the server when the file is attached, for
+  // checking a download with the usual tools (`sha256sum`).
+  string sha256 = 6;
+}
+
+message ReleaseRef {
+  RepositoryRef repository = 1;
+  string tag = 2;
+}
+
+message ListReleasesRequest {
+  RepositoryRef repository = 1;
+  uint32 limit = 2;
+  string page_token = 3;
+}
+
+message ListReleasesResponse {
+  repeated Release releases = 1;
+  string next_page_token = 2;
+}
+
+message CreateReleaseRequest {
+  RepositoryRef repository = 1;
+  string tag = 2;
+  // Where to make the tag if it doesn't exist yet: a branch or changeset id; empty: the
+  // default branch. Ignored when the tag exists.
+  string at = 3;
+  string title = 4;
+  string body = 5;
+  bool draft = 6;
+  bool prerelease = 7;
+}
+
+message UpdateReleaseRequest {
+  ReleaseRef ref = 1;
+  // Only fields named here change: title, body, draft, prerelease. Publishing a draft
+  // (draft: false) dates it and announces it.
+  repeated string fields = 2;
+  string title = 3;
+  string body = 4;
+  bool draft = 5;
+  bool prerelease = 6;
+}
+
+message ReleaseNotesRequest {
+  RepositoryRef repository = 1;
+  // The tag being released; it may not exist yet, then `at` says where it will be.
+  string tag = 2;
+  string at = 3;
+  // Notes since this tag; empty: since the latest published release.
+  string previous = 4;
+}
+
+// What changed since the previous release, written up: landed change requests grouped into
+// breaking changes, features, fixes and other changes, the issues they fixed, and who made
+// them (people and agents apart).
+message ReleaseNotes {
+  string previous_tag = 1;
+  // The next version by semantic versioning, from what changed.
+  string suggested_version = 2;
+  // In Markdown, ready to edit.
+  string body = 3;
+  // Changesets since the previous release.
+  uint32 changes = 4;
+  repeated string people = 5;
+  repeated string agents = 6;
+  repeated uint64 change_requests = 7;
+  repeated uint64 issues_fixed = 8;
+}
+
+message ReleaseAssetRef {
+  ReleaseRef ref = 1;
+  string name = 2;
+}
+
+// A link that downloads one file for a few minutes, without signing in: give it to a browser
+// or to curl. Relative to the server.
+message ReleaseAssetLink {
+  string url = 1;
+  int64 expires_at_ms = 2;
+}
+
+message AddReleaseAssetRequest {
+  ReleaseRef ref = 1;
+  ReleaseAsset asset = 2;
+}
+
+message DeleteReleaseAssetRequest {
+  ReleaseRef ref = 1;
+  string name = 2;
+}
+
+service Releases {
+  rpc ListReleases(ListReleasesRequest) returns (ListReleasesResponse);
+  rpc GetRelease(ReleaseRef) returns (Release);
+  rpc CreateRelease(CreateReleaseRequest) returns (Release);
+  rpc UpdateRelease(UpdateReleaseRequest) returns (Release);
+  // The release goes; its tag stays.
+  rpc DeleteRelease(ReleaseRef) returns (Empty);
+  rpc GenerateReleaseNotes(ReleaseNotesRequest) returns (ReleaseNotes);
+  rpc AddReleaseAsset(AddReleaseAssetRequest) returns (Release);
+  rpc DeleteReleaseAsset(DeleteReleaseAssetRequest) returns (Release);
+  rpc ReleaseAssetUrl(ReleaseAssetRef) returns (ReleaseAssetLink);
+  // A link to PUT one file's bytes to: the server stores them in chunks as they arrive and
+  // attaches the file (replacing one of the same name). For browsers, which can't chunk.
+  rpc ReleaseUploadUrl(ReleaseAssetRef) returns (ReleaseAssetLink);
+}

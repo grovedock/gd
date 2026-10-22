@@ -1,0 +1,82 @@
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/proto", "crates/adapters", "crates/workflow", "crates/gd"]
+
+[workspace.package]
+version = "4.0.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/grovedock/gd"
+rust-version = "1.94"
+homepage = "https://grovedock.com/"
+readme = "README.md"
+keywords = ["vcs", "source-control", "monorepo", "git", "agents"]
+categories = ["development-tools", "command-line-utilities"]
+
+[workspace.dependencies]
+grovedock-core = { path = "crates/core", version = "4" }
+grovedock-adapters = { path = "crates/adapters", version = "4" }
+grovedock-proto = { path = "crates/proto", version = "4" }
+grovedock-workflow = { path = "crates/workflow", version = "4" }
+anyhow = "1"
+async-trait = "0.1"
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "http2"] }
+blake3 = "1"
+bytes = "1"
+clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3"
+getrandom = "0.4"
+hex = "0.4"
+hmac = "0.13"
+prost = "0.14"
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+tempfile = "3"
+shlex = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "fs", "sync", "time", "io-util", "process", "signal"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic = { version = "0.14", features = ["tls-ring", "tls-native-roots"] }
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
+zstd = "0.14"
+
+proptest = "1"
+criterion = { version = "0.8", features = ["async_tokio"] }
+object_store = "0.14"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
+quick_cache = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.18", default-features = false, features = ["http-listener"] }
+tonic-health = "0.14"
+tonic-reflection = "0.14"
+tonic-web = "0.14"
+mimalloc = "0.1"
+ignore = "0.4"
+url = "2"
+similar = "3"
+fastcdc = "5"
+fuser = "0.18"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls", "ring", "rustls-native-certs"] }
+jsonwebtoken = { version = "11", default-features = false, features = ["aws_lc_rs"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "http2"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rmcp = { version = "3.5", features = ["server", "transport-io", "macros", "transport-streamable-http-server"] }
+schemars = "1"
+tower = { version = "0.5", features = ["limit", "util"] }
+tower-http = { version = "0.7", features = ["cors", "fs"] }
+
+# Line tables are enough for backtraces; full debug info made target/ tens of gigabytes.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

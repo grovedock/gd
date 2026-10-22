@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+// Issues, their labels and milestones. Kept apart from gd_platform.proto so clients load
+// them when first used.
+package gd.v1;
+
+import "gd.proto";
+import "gd_platform.proto";
+
+message IssueRef {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+}
+
+message ListIssuesRequest {
+  RepositoryRef repository = 1;
+  // Empty: open issues.
+  repeated IssueState states = 2;
+  string assignee = 3;
+  string label = 4;
+  // Search syntax: words in the title or description, `#12`, and `is:open`, `is:closed`,
+  // `is:completed`, `is:not-planned`, `is:fixing`, `label:`, `assignee:`, `author:` (`*` and
+  // `@me`), `no:assignee`, `no:label`; `-key:value` excludes. No `is:`: open issues.
+  string query = 5;
+  uint32 limit = 6;
+  // From the previous response's `next_page_token`.
+  string page_token = 7;
+  // newest (default), oldest, updated, comments.
+  string sort = 8;
+}
+
+message ListIssuesResponse {
+  repeated Issue issues = 1;
+  string next_page_token = 2;
+  // How many issues match, across every page.
+  uint64 total = 3;
+}
+
+message CreateIssueRequest {
+  RepositoryRef repository = 1;
+  string title = 2;
+  string body = 3;
+  repeated string labels = 4;
+  repeated string assignees = 5;
+  uint64 milestone = 6;
+}
+
+message UpdateIssueRequest {
+  IssueRef ref = 1;
+  // Only fields named here change: title, body, state, labels, assignees.
+  repeated string fields = 2;
+  string title = 3;
+  string body = 4;
+  IssueState state = 5;
+  repeated string labels = 6;
+  repeated string assignees = 7;
+  // With "milestone" in fields; 0 takes it off.
+  uint64 milestone = 8;
+}
+
+message AddIssueCommentRequest {
+  IssueRef ref = 1;
+  string body = 2;
+}
+
+service Issues {
+  rpc ListIssues(ListIssuesRequest) returns (ListIssuesResponse);
+  // Views: open, mine, unassigned, fixing, authored, closed.
+  rpc IssueFacets(RepositoryRef) returns (Facets);
+  rpc GetIssue(IssueRef) returns (Issue);
+  rpc CreateIssue(CreateIssueRequest) returns (Issue);
+  rpc UpdateIssue(UpdateIssueRequest) returns (Issue);
+  rpc ListIssueComments(IssueRef) returns (ListCommentsResponse);
+  rpc AddIssueComment(AddIssueCommentRequest) returns (Comment);
+  rpc EditIssueComment(EditCommentRequest) returns (Comment);
+
+  // Labels: every label in use or described, with its colour, description and counts.
+  rpc ListLabels(RepositoryRef) returns (ListLabelsResponse);
+  // Describes a label (colour, description), or renames it everywhere it's used.
+  rpc SetLabel(SetLabelRequest) returns (Label);
+  // Removes a label from every issue and change request.
+  rpc DeleteLabel(LabelRef) returns (Empty);
+
+  // Milestones: a goal with a date, and the issues and change requests planned for it.
+  rpc ListMilestones(ListMilestonesRequest) returns (ListMilestonesResponse);
+  rpc CreateMilestone(Milestone) returns (Milestone);
+  rpc UpdateMilestone(UpdateMilestoneRequest) returns (Milestone);
+  // Its issues and change requests keep everything but the milestone.
+  rpc DeleteMilestone(MilestoneRef) returns (Empty);
+
+  // Images for comments and descriptions (PNG, JPEG, GIF or WebP, up to 10 MB). Anyone who can
+  // comment can upload one; anyone who can read the repository can see it.
+  rpc UploadImage(UploadImageRequest) returns (ImageRef);
+  rpc GetImage(ImageRef) returns (Image);
+  // An image on another site that Markdown shows (a README's badges), fetched by the server so
+  // that site never learns who reads the text. Signed-in callers only; up to 5 MB.
+  rpc FetchImage(FetchImageRequest) returns (Image);
+}
+
+message FetchImageRequest {
+  // http:// or https://.
+  string url = 1;
+}
+
+message UploadImageRequest {
+  RepositoryRef repository = 1;
+  bytes data = 2;
+}
+
+message ImageRef {
+  RepositoryRef repository = 1;
+  // `<sha256>.<ext>`; Markdown links it as `/OWNER/NAME/images/ID`.
+  string id = 2;
+}
+
+message Image {
+  string content_type = 1;
+  bytes data = 2;
+}
+
+message Label {
+  string name = 1;
+  // #rrggbb; empty: chosen from the name.
+  string color = 2;
+  string description = 3;
+  uint32 open_issues = 4;
+  uint32 open_change_requests = 5;
+}
+
+message ListLabelsResponse {
+  repeated Label labels = 1;
+}
+
+message SetLabelRequest {
+  RepositoryRef repository = 1;
+  string name = 2;
+  // A new name: every issue and change request with the label gets the new one.
+  string rename_to = 3;
+  string color = 4;
+  string description = 5;
+}
+
+message LabelRef {
+  RepositoryRef repository = 1;
+  string name = 2;
+}
+
+message Milestone {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  string title = 3;
+  string description = 4;
+  // 0: no date.
+  int64 due_ms = 5;
+  bool closed = 6;
+  // Issues and change requests planned for it: still open, and done (closed or landed).
+  uint32 open = 7;
+  uint32 done = 8;
+  int64 created_at_ms = 9;
+}
+
+message ListMilestonesRequest {
+  RepositoryRef repository = 1;
+  // Closed ones instead of open ones.
+  bool closed = 2;
+}
+
+message ListMilestonesResponse {
+  repeated Milestone milestones = 1;
+}
+
+message UpdateMilestoneRequest {
+  MilestoneRef ref = 1;
+  // title, description, due, closed.
+  repeated string fields = 2;
+  string title = 3;
+  string description = 4;
+  int64 due_ms = 5;
+  bool closed = 6;
+}
+
+message MilestoneRef {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+}

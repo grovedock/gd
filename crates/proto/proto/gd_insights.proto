@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+// How an organisation's work flows: lands, how long change requests take, how long reviews
+// wait, and how much agent work was undone. Kept apart so clients load it when first used.
+package gd.v1;
+
+service Insights {
+  // For administrators of the organisation.
+  rpc Flow(FlowRequest) returns (FlowResponse);
+}
+
+message FlowRequest {
+  string org = 1;
+  // Weeks back, up to 26 (default 8).
+  uint32 weeks = 2;
+}
+
+message FlowWeek {
+  int64 from_ms = 1;
+  uint32 people_lands = 2;
+  uint32 agent_lands = 3;
+  // Change requests landed this week, and the median time from opened to landed.
+  uint32 change_requests_landed = 4;
+  int64 lead_ms = 5;
+  // Change requests opened this week that were reviewed, and the median wait for the first review.
+  uint32 reviewed = 6;
+  int64 review_wait_ms = 7;
+  // Undo change requests opened this week (an agent's work taken back).
+  uint32 undone = 8;
+}
+
+message FlowResponse {
+  // Oldest first, the last being this week so far.
+  repeated FlowWeek weeks = 1;
+}

@@ -1,0 +1,33 @@
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    println!("cargo:rerun-if-changed=proto/gd.proto");
+    println!("cargo:rerun-if-changed=proto/gd_objects.proto");
+    println!("cargo:rerun-if-changed=proto/gd_platform.proto");
+    println!("cargo:rerun-if-changed=proto/gd_issues.proto");
+    println!("cargo:rerun-if-changed=proto/gd_releases.proto");
+    println!("cargo:rerun-if-changed=proto/gd_social.proto");
+    println!("cargo:rerun-if-changed=proto/gd_insights.proto");
+    println!("cargo:rerun-if-changed=proto/gd_status.proto");
+    println!("cargo:rerun-if-changed=proto/gd_imports.proto");
+    println!("cargo:rerun-if-changed=proto/gd_runs.proto");
+    println!("cargo:rerun-if-changed=proto/gd_landing.proto");
+    println!("cargo:rerun-if-changed=proto/gd_packet.proto");
+    let out = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
+    tonic_prost_build::configure().file_descriptor_set_path(out.join("gd_descriptor.bin")).compile_protos(
+        &[
+            "proto/gd.proto",
+            "proto/gd_objects.proto",
+            "proto/gd_platform.proto",
+            "proto/gd_issues.proto",
+            "proto/gd_releases.proto",
+            "proto/gd_social.proto",
+            "proto/gd_insights.proto",
+            "proto/gd_status.proto",
+            "proto/gd_imports.proto",
+            "proto/gd_runs.proto",
+            "proto/gd_landing.proto",
+            "proto/gd_packet.proto",
+        ],
+        &["proto"],
+    )?;
+    Ok(())
+}

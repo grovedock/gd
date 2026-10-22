@@ -1,0 +1,19 @@
+[package]
+name = "grovedock-workflow"
+description = "Grovedock Runs: workflow files (a GitHub Actions-compatible subset), triggers, matrices and expressions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+globset = "0.4"
+regex = "1"
+sha2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+yaml-rust2 = "0.10"

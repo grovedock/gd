@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 244" width="840" height="244" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Clients fetch file contents through a node daemon and a regional cache from the grovedockd server; commits, lands and history queries go straight to the server, which stores metadata in SQLite, Postgres or CockroachDB and objects in S3, GCS, Azure or disk.">
+<rect x="0" y="30" width="170" height="112" rx="8" fill="none" stroke="#D5DBD7" stroke-width="1.5"/>
+<text x="14" y="54" font-size="14" font-weight="600" fill="#23282D">Clients</text>
+<text x="14" y="74" font-size="12" fill="#5B6670">gd CLI</text>
+<text x="14" y="91" font-size="12" fill="#5B6670">git (remote helper)</text>
+<text x="14" y="108" font-size="12" fill="#5B6670">AI agents (MCP)</text>
+<text x="14" y="125" font-size="12" fill="#5B6670">SDKs: Python, TS, Go</text>
+<rect x="214" y="30" width="150" height="112" rx="8" fill="none" stroke="#D5DBD7" stroke-width="1.5"/>
+<text x="228" y="54" font-size="14" font-weight="600" fill="#23282D">Node daemon</text>
+<text x="228" y="74" font-size="12" fill="#5B6670">one per CI machine</text>
+<text x="228" y="91" font-size="12" fill="#5B6670">memory + disk cache</text>
+<text x="228" y="108" font-size="12" fill="#5B6670">prefetches main</text>
+<rect x="408" y="30" width="150" height="112" rx="8" fill="none" stroke="#D5DBD7" stroke-width="1.5"/>
+<text x="422" y="54" font-size="14" font-weight="600" fill="#23282D">Regional cache</text>
+<text x="422" y="74" font-size="12" fill="#5B6670">stateless</text>
+<text x="422" y="91" font-size="12" fill="#5B6670">read-through</text>
+<text x="422" y="108" font-size="12" fill="#5B6670">scale out freely</text>
+<rect x="602" y="10" width="236" height="124" rx="8" fill="#16324F" stroke="#16324F" stroke-width="1.5"/>
+<text x="616" y="34" font-size="14" font-weight="600" fill="#EEF1EC">grovedockd server</text>
+<text x="616" y="54" font-size="12" fill="#EEF1EC">creates commits, rebases, lands</text>
+<text x="616" y="71" font-size="12" fill="#EEF1EC">history, blame, diff, search</text>
+<text x="616" y="88" font-size="12" fill="#EEF1EC">permissions, SSO, land checks</text>
+<text x="616" y="105" font-size="12" fill="#EEF1EC">every feature behind a flag</text>
+<rect x="602" y="170" width="112" height="70" rx="8" fill="none" stroke="#D5DBD7" stroke-width="1.5"/>
+<text x="616" y="194" font-size="14" font-weight="600" fill="#23282D">Metadata</text>
+<text x="616" y="214" font-size="12" fill="#5B6670">SQLite, Postgres,</text>
+<text x="616" y="231" font-size="12" fill="#5B6670">CockroachDB</text>
+<rect x="726" y="170" width="112" height="70" rx="8" fill="none" stroke="#D5DBD7" stroke-width="1.5"/>
+<text x="740" y="194" font-size="14" font-weight="600" fill="#23282D">Objects</text>
+<text x="740" y="214" font-size="12" fill="#5B6670">S3, GCS, Azure,</text>
+<text x="740" y="231" font-size="12" fill="#5B6670">disk</text>
+<line x1="170" y1="86" x2="208" y2="86" stroke="#5B6670" stroke-width="1.5"/>
+<path d="M214 86 l-7 -4 v8z" fill="#5B6670"/>
+<line x1="364" y1="86" x2="402" y2="86" stroke="#5B6670" stroke-width="1.5"/>
+<path d="M408 86 l-7 -4 v8z" fill="#5B6670"/>
+<line x1="558" y1="86" x2="596" y2="86" stroke="#5B6670" stroke-width="1.5"/>
+<path d="M602 86 l-7 -4 v8z" fill="#5B6670"/>
+<text x="386" y="20" font-size="11" fill="#5B6670" text-anchor="middle">file contents, cached at every hop</text>
+<path d="M85 142 V206 H586 V118 H595" fill="none" stroke="#5B6670" stroke-width="1.5" stroke-dasharray="4 4"/>
+<path d="M602 118 l-7 -4 v8z" fill="#5B6670"/>
+<text x="97" y="198" font-size="11" fill="#5B6670">commit, land, log, blame: small calls straight to the server</text>
+<line x1="658" y1="134" x2="658" y2="170" stroke="#5B6670" stroke-width="1.5"/>
+<line x1="782" y1="134" x2="782" y2="170" stroke="#5B6670" stroke-width="1.5"/>
+</svg>

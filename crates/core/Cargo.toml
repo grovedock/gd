@@ -1,0 +1,35 @@
+[package]
+name = "grovedock-core"
+description = "Grovedock domain kernel: content-addressed objects, changesets, derived data and infrastructure ports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+blake3.workspace = true
+bytes.workspace = true
+futures.workspace = true
+hex.workspace = true
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+zstd.workspace = true
+fastcdc.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+proptest.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "core"
+harness = false

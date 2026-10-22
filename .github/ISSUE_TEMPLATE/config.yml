@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Grovedock (the hosted platform)
+    url: https://grovedock.com/support
+    about: Questions about cloud.grovedock.com, accounts or plans.
+  - name: A security problem
+    url: https://github.com/grovedock/gd/security/policy
+    about: Report it privately, please.

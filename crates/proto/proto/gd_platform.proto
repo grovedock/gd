@@ -1,0 +1,1097 @@
+syntax = "proto3";
+
+// Hosting: organisations, repositories, accounts, teams and tokens, and review (change requests,
+// comments, approvals, protected branches). Repository-scoped calls on the other services name
+// their repository with the `x-gd-repo: OWNER/NAME` request header; a call without it reaches
+// the server's default repository, so single-repository servers and older clients are unchanged.
+package gd.v1;
+
+import "gd.proto";
+
+// ---- accounts ----
+
+enum AccountKind {
+  ACCOUNT_KIND_UNSPECIFIED = 0;
+  ACCOUNT_KIND_PERSON = 1;
+  // An automated author. Agents are owned by a person or a team, who answer for them.
+  ACCOUNT_KIND_AGENT = 2;
+  ACCOUNT_KIND_ORGANIZATION = 3;
+}
+
+message Account {
+  string login = 1;
+  string display_name = 2;
+  AccountKind kind = 3;
+  // Agents only: the person or team that owns the agent.
+  string owner = 4;
+  string avatar_url = 5;
+  int64 created_at_ms = 6;
+  bool site_admin = 7;
+  // Agents: paused by their owner (reads only), and the only paths they may change (empty:
+  // any path their role allows).
+  bool paused = 8;
+  repeated string allowed_paths = 9;
+  // Agents: at most this many lands, and CI runs, a day (UTC); unset: no limit.
+  optional uint32 lands_per_day = 10;
+  optional uint32 runs_per_day = 11;
+}
+
+// Pauses or resumes an agent and keeps its changes to some paths; by its owner (or a server
+// administrator).
+message SetAgentControlsRequest {
+  string login = 1;
+  bool paused = 2;
+  // Path prefixes like `services/api` or `docs/`; empty for any path.
+  repeated string allowed_paths = 3;
+  // Daily budgets (UTC days); unset: no limit. Over budget, the agent is refused and told why.
+  optional uint32 lands_per_day = 4;
+  optional uint32 runs_per_day = 5;
+}
+
+// Stops every agent writing to an organisation's repositories, whoever owns them (they keep
+// reading); its administrators'.
+message SetOrgAgentsPausedRequest {
+  string org = 1;
+  bool paused = 2;
+}
+
+// ---- repositories ----
+
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  VISIBILITY_PRIVATE = 1;
+  VISIBILITY_INTERNAL = 2;
+  VISIBILITY_PUBLIC = 3;
+}
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_READ = 1;
+  // May open change requests and comment; may not land on protected branches.
+  ROLE_TRIAGE = 2;
+  ROLE_WRITE = 3;
+  ROLE_MAINTAIN = 4;
+  ROLE_ADMIN = 5;
+}
+
+message Repository {
+  string owner = 1;
+  string name = 2;
+  string description = 3;
+  Visibility visibility = 4;
+  string default_branch = 5;
+  int64 created_at_ms = 6;
+  // The caller's role, so the app shows only what the caller may do.
+  Role viewer_role = 7;
+  bool archived = 8;
+  // Activity in the last 24 hours, for lists.
+  uint32 lands_24h = 9;
+  uint32 open_change_requests = 10;
+  bytes tip = 11;
+  int64 tip_at_ms = 12;
+  repeated string topics = 13;
+  // People who starred it; agents don't star.
+  uint32 stars = 14;
+  bool viewer_starred = 15;
+  Watch viewer_watch = 16;
+  // A fork: the repository it was forked from (empty when that's gone, or for others).
+  RepositoryRef fork_of = 17;
+  // Forks of it the caller can read.
+  uint32 forks = 18;
+}
+
+// How much of a repository's news reaches a person.
+enum Watch {
+  // What involves you: reviews asked of you, your issues, mentions, your failed checks.
+  WATCH_PARTICIPATING = 0;
+  // That, and every new issue, change request and release.
+  WATCH_ALL = 1;
+  // Nothing from this repository, mentions included.
+  WATCH_IGNORE = 2;
+}
+
+message RepositoryRef {
+  string owner = 1;
+  string name = 2;
+}
+
+message ListRepositoriesRequest {
+  // Empty: every repository the caller can read.
+  string owner = 1;
+  string query = 2;
+  uint32 limit = 3;
+  string page_token = 4;
+  // Only repositories the caller owns, belongs to (its organisation or a team) or was given
+  // access to: not those it can read only because they are public or internal.
+  bool involved = 5;
+}
+message ListRepositoriesResponse {
+  repeated Repository repositories = 1;
+  string next_page_token = 2;
+}
+
+message CreateRepositoryRequest {
+  string owner = 1;
+  string name = 2;
+  string description = 3;
+  Visibility visibility = 4;
+  string default_branch = 5;
+}
+
+message UpdateRepositoryRequest {
+  string owner = 1;
+  string name = 2;
+  // Only fields named in `fields` change (description, visibility, default_branch, archived, topics).
+  repeated string fields = 3;
+  string description = 4;
+  Visibility visibility = 5;
+  string default_branch = 6;
+  bool archived = 7;
+  repeated string topics = 8;
+}
+
+// Renames a repository, or moves it to another owner (an organisation you administer, or
+// your own account). Its history, issues, change requests, grants to people and tokens follow
+// it, and the old name answers with where it went. Needs admin access.
+message RenameRepositoryRequest {
+  string owner = 1;
+  string name = 2;
+  // Empty: keep the name.
+  string new_name = 3;
+  // Empty: keep the owner. Moving drops grants to the old organisation's teams, and an
+  // internal repository becomes private under a person.
+  string new_owner = 4;
+}
+
+// Deletes a repository: it disappears at once and its name is free again. The server keeps
+// it, hidden, until an operator purges it, so a mistake can be undone. Needs admin access;
+// `confirm` must repeat OWNER/NAME.
+message DeleteRepositoryRequest {
+  string owner = 1;
+  string name = 2;
+  string confirm = 3;
+}
+
+// ---- organisations, members and teams ----
+
+message Organization {
+  string login = 1;
+  string display_name = 2;
+  string description = 3;
+  int64 created_at_ms = 4;
+  Role viewer_role = 5;
+  uint32 repositories = 6;
+  // People who are members.
+  uint32 members = 7;
+  // Agents that are members or landed a change here this month.
+  uint32 agents = 8;
+  // Can read but not write (ADR-035); every page of the organisation says so.
+  bool suspended = 9;
+}
+
+message Member {
+  Account account = 1;
+  Role role = 2;
+  repeated string teams = 3;
+  // The address they sign in with; only to members of the organisation, so people with the
+  // same name can be told apart.
+  string email = 4;
+}
+
+message Team {
+  string org = 1;
+  string slug = 2;
+  string name = 3;
+  string description = 4;
+  repeated string members = 5;
+}
+
+message Grant {
+  // A person, agent or team ("org/team-slug").
+  string principal = 1;
+  Role role = 2;
+}
+
+message OrgName { string login = 1; }
+message ListOrganizationsResponse { repeated Organization organizations = 1; }
+message CreateOrganizationRequest {
+  string login = 1;
+  string display_name = 2;
+  string description = 3;
+}
+message ListMembersResponse { repeated Member members = 1; }
+message SetMemberRequest {
+  string org = 1;
+  string login = 2;
+  // ROLE_UNSPECIFIED removes the member.
+  Role role = 3;
+}
+message ListTeamsResponse { repeated Team teams = 1; }
+message TeamRef {
+  string org = 1;
+  string slug = 2;
+}
+message ListGrantsResponse { repeated Grant grants = 1; }
+message SetGrantRequest {
+  RepositoryRef repository = 1;
+  string principal = 2;
+  // ROLE_UNSPECIFIED removes the grant.
+  Role role = 3;
+}
+
+// ---- tokens ----
+
+message Token {
+  string id = 1;
+  string name = 2;
+  // For agent tokens, the agent the token acts as.
+  string acts_as = 3;
+  repeated string repositories = 4;
+  Role max_role = 5;
+  int64 created_at_ms = 6;
+  int64 expires_at_ms = 7;
+  int64 last_used_at_ms = 8;
+}
+message ListTokensResponse { repeated Token tokens = 1; }
+message CreateTokenRequest {
+  string name = 1;
+  string acts_as = 2;
+  // OWNER/NAME, or OWNER/* for every repository of an organisation you belong to (made later
+  // too). Empty: every repository you can reach.
+  repeated string repositories = 3;
+  Role max_role = 4;
+  int64 expires_at_ms = 5;
+}
+message CreateTokenResponse {
+  Token token = 1;
+  // Shown once; the server keeps only a hash.
+  string secret = 2;
+}
+message RevokeTokenRequest { string id = 1; }
+
+// ---- webhooks ----
+
+// Calls a URL when something happens in a repository. Events: push, change_request, review,
+// comment, check (and ping). Bodies are JSON, signed like GitHub's: the
+// `X-Grovedock-Signature-256` header is `sha256=` and the hex HMAC-SHA256 of the body.
+message Webhook {
+  string id = 1;
+  RepositoryRef repository = 2;
+  string url = 3;
+  // Empty: every event.
+  repeated string events = 4;
+  bool active = 5;
+  int64 created_at_ms = 6;
+  string created_by = 7;
+  // The last delivery's HTTP status (0: none yet, -1: no answer).
+  int32 last_status = 8;
+  int64 last_delivery_at_ms = 9;
+}
+message CreateWebhookRequest {
+  RepositoryRef repository = 1;
+  string url = 2;
+  repeated string events = 3;
+  // Empty: the server makes one and returns it once.
+  string secret = 4;
+}
+message CreateWebhookResponse {
+  Webhook webhook = 1;
+  string secret = 2;
+}
+message WebhookRef { string id = 1; }
+message ListWebhooksResponse { repeated Webhook webhooks = 1; }
+message WebhookDelivery {
+  string id = 1;
+  string event = 2;
+  // HTTP status of the last attempt (0: not tried yet, -1: no answer).
+  int32 status = 3;
+  string error = 4;
+  uint32 attempts = 5;
+  int64 created_at_ms = 6;
+  bool delivered = 7;
+  string payload = 8;
+}
+message ListWebhookDeliveriesResponse { repeated WebhookDelivery deliveries = 1; }
+
+message LinkIdentityRequest {
+  string login = 1;
+  // `email`, or the id of a configured sign-in provider such as `google`.
+  string provider = 2;
+  // The email address, or the provider's `sub` for the person.
+  string subject = 3;
+}
+
+message ViewerResponse {
+  Account account = 1;
+  repeated Organization organizations = 2;
+  // The platform token making the call, if one is: revoke it to sign out.
+  string token_id = 3;
+}
+
+service Platform {
+  rpc SetAgentControls(SetAgentControlsRequest) returns (Account);
+  rpc SetOrgAgentsPaused(SetOrgAgentsPausedRequest) returns (Empty);
+  rpc Viewer(Empty) returns (ViewerResponse);
+  rpc GetAccount(OrgName) returns (Account);
+  rpc ListOrganizations(Empty) returns (ListOrganizationsResponse);
+  rpc GetOrganization(OrgName) returns (Organization);
+  rpc CreateOrganization(CreateOrganizationRequest) returns (Organization);
+  rpc ListMembers(OrgName) returns (ListMembersResponse);
+  rpc SetMember(SetMemberRequest) returns (Member);
+  rpc ListTeams(OrgName) returns (ListTeamsResponse);
+  // Creates the team, or replaces its name, description and members.
+  rpc SetTeam(Team) returns (Team);
+  rpc DeleteTeam(TeamRef) returns (Empty);
+
+  rpc ListRepositories(ListRepositoriesRequest) returns (ListRepositoriesResponse);
+  rpc GetRepository(RepositoryRef) returns (Repository);
+  rpc CreateRepository(CreateRepositoryRequest) returns (Repository);
+  rpc UpdateRepository(UpdateRepositoryRequest) returns (Repository);
+  rpc RenameRepository(RenameRepositoryRequest) returns (Repository);
+  rpc DeleteRepository(DeleteRepositoryRequest) returns (Empty);
+  rpc ListGrants(RepositoryRef) returns (ListGrantsResponse);
+  rpc SetGrant(SetGrantRequest) returns (Grant);
+
+  rpc ListTokens(Empty) returns (ListTokensResponse);
+  // What the caller gets emailed about.
+  rpc GetNotificationSettings(Empty) returns (NotificationSettings);
+  rpc SetNotificationSettings(NotificationSettings) returns (NotificationSettings);
+  rpc CreateToken(CreateTokenRequest) returns (CreateTokenResponse);
+  rpc RevokeToken(RevokeTokenRequest) returns (Empty);
+
+  rpc ListWebhooks(RepositoryRef) returns (ListWebhooksResponse);
+  rpc CreateWebhook(CreateWebhookRequest) returns (CreateWebhookResponse);
+  rpc DeleteWebhook(WebhookRef) returns (Empty);
+  rpc ListWebhookDeliveries(WebhookRef) returns (ListWebhookDeliveriesResponse);
+  // Sends a `ping` event now.
+  rpc PingWebhook(WebhookRef) returns (WebhookDelivery);
+
+  // Lets an identity sign in as an existing account, e.g. the first administrator's email
+  // address. Site administrators only.
+  rpc LinkIdentity(LinkIdentityRequest) returns (Empty);
+
+  // Invitations to an organisation: a single-use link, valid 7 days, emailed when the server
+  // sends mail. Whoever opens it and signs in joins with the role. Organisation administrators.
+  rpc CreateInvitation(CreateInvitationRequest) returns (CreateInvitationResponse);
+  // Invitations not yet accepted, including expired ones.
+  rpc ListInvitations(OrgName) returns (ListInvitationsResponse);
+  rpc RevokeInvitation(InvitationRef) returns (Empty);
+  // Plans and usage (ADR-035). An organisation's active agents, people, storage and limits:
+  // its administrators and site administrators.
+  rpc GetUsage(GetUsageRequest) returns (Usage);
+  // How each agent of an organisation is doing: what it landed day by day, its change
+  // requests, failed checks and refused lands (organisation administrators).
+  rpc AgentStats(AgentStatsRequest) returns (AgentStatsResponse);
+  // What one agent did, session by session: reads, searches, lands (and refusals, with why),
+  // change requests, failed checks (organisation administrators, and the person it answers to).
+  rpc AgentActivity(AgentActivityRequest) returns (AgentActivityResponse);
+  // Replaces an organisation's limits (not its suspension). Site administrators only.
+  rpc SetLimits(SetLimitsRequest) returns (OrgLimits);
+  // A suspended organisation can read but not write. Site administrators only.
+  rpc SetSuspended(SetSuspendedRequest) returns (OrgLimits);
+  // What this server offers: anyone may ask.
+  rpc GetCapabilities(Empty) returns (Capabilities);
+  // The support licence this server was started with. Site administrators only.
+  rpc GetLicense(Empty) returns (License);
+}
+
+// ---- review ----
+
+enum ChangeRequestState {
+  CHANGE_REQUEST_STATE_UNSPECIFIED = 0;
+  CHANGE_REQUEST_STATE_OPEN = 1;
+  CHANGE_REQUEST_STATE_DRAFT = 2;
+  CHANGE_REQUEST_STATE_LANDED = 3;
+  CHANGE_REQUEST_STATE_CLOSED = 4;
+}
+
+enum Verdict {
+  VERDICT_UNSPECIFIED = 0;
+  VERDICT_COMMENTED = 1;
+  VERDICT_APPROVED = 2;
+  VERDICT_CHANGES_REQUESTED = 3;
+}
+
+enum CheckState {
+  CHECK_STATE_UNSPECIFIED = 0;
+  CHECK_STATE_PENDING = 1;
+  CHECK_STATE_PASSED = 2;
+  CHECK_STATE_FAILED = 3;
+  CHECK_STATE_SKIPPED = 4;
+}
+
+message Check {
+  string name = 1;
+  CheckState state = 2;
+  string summary = 3;
+  string details_url = 4;
+  int64 started_at_ms = 5;
+  int64 finished_at_ms = 6;
+}
+
+message ReviewSummary {
+  string reviewer = 1;
+  Verdict verdict = 2;
+  int64 at_ms = 3;
+  // The source tip the reviewer looked at; a newer tip makes the review stale.
+  bytes reviewed_tip = 4;
+}
+
+message ChangeRequest {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  string title = 3;
+  string body = 4;
+  string author = 5;
+  ChangeRequestState state = 6;
+  string source = 7;
+  string target = 8;
+  bytes source_tip = 9;
+  bytes base = 10;
+  int64 created_at_ms = 11;
+  int64 updated_at_ms = 12;
+  repeated string requested_reviewers = 13;
+  repeated ReviewSummary reviews = 14;
+  repeated Check checks = 15;
+  uint32 comments = 16;
+  uint32 files = 17;
+  uint32 additions = 18;
+  uint32 deletions = 19;
+  // Files whose edits clash with changes landed on the target since `base` (files both changed
+  // whose edits combine line by line aren't listed: landing merges them).
+  repeated string conflicts = 20;
+  // Why it cannot land yet, in words ("needs 1 more approval"); empty when it can.
+  repeated string blockers = 21;
+  bytes landed_as = 22;
+  repeated string labels = 23;
+  // Opened automatically when an agent landed on a protected branch.
+  bool from_protected_land = 24;
+  // Issues and change requests that mention it (#12); filled in when one is read.
+  repeated uint64 referenced_by = 25;
+  uint64 milestone = 26;
+  // From a fork: the repository `source` is a branch of. Empty: a branch of this repository.
+  RepositoryRef source_repository = 27;
+  // Lands by itself once nothing blocks it, as this person (or agent); empty: off.
+  string land_when_ready_by = 28;
+  // Where landing by itself has got to, in words ("testing the result on main: run #12");
+  // empty when it isn't under way.
+  string landing = 29;
+}
+
+message ListChangeRequestsRequest {
+  RepositoryRef repository = 1;
+  // Empty: all states.
+  repeated ChangeRequestState states = 2;
+  string author = 3;
+  string reviewer = 4;
+  // Search syntax: words in the title, branch or author, `#12`, and `is:open` (drafts too),
+  // `is:draft`, `is:landed`, `is:closed`, `is:ready`, `is:blocked`, `is:attention`,
+  // `author:` (`*` and `@me`), `reviewer:`, `into:`, `from:`, `label:`; `-key:value` excludes.
+  // No state named (here or in `states`): every state.
+  string query = 5;
+  uint32 limit = 6;
+  string page_token = 7;
+  // newest (default), oldest, updated, largest.
+  string sort = 8;
+}
+message ListChangeRequestsResponse {
+  repeated ChangeRequest change_requests = 1;
+  string next_page_token = 2;
+  uint64 total = 3;
+}
+
+message ChangeRequestRef {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+}
+
+message CreateChangeRequestRequest {
+  RepositoryRef repository = 1;
+  string source = 2;
+  string target = 3;
+  string title = 4;
+  string body = 5;
+  bool draft = 6;
+  repeated string reviewers = 7;
+  uint64 milestone = 8;
+  // To propose a fork's branch: the fork (of this repository, at any depth). Reading this
+  // repository is then enough to open one; landing it still takes Write here.
+  RepositoryRef source_repository = 9;
+}
+
+message UpdateChangeRequestRequest {
+  ChangeRequestRef ref = 1;
+  repeated string fields = 2;
+  string title = 3;
+  string body = 4;
+  ChangeRequestState state = 5;
+  repeated string reviewers = 6;
+  repeated string labels = 7;
+  uint64 milestone = 8;
+}
+
+message Comment {
+  string id = 1;
+  string author = 2;
+  string body = 3;
+  int64 created_at_ms = 4;
+  int64 edited_at_ms = 5;
+  // Line comments: the file, line and side they are attached to, and the tip they were made on.
+  string path = 6;
+  uint32 line = 7;
+  bool on_base = 8;
+  bytes at_tip = 9;
+  // Replies name the first comment of their thread.
+  string thread = 10;
+  bool resolved = 11;
+  // A suggested replacement for the commented lines, which the author can apply.
+  string suggestion = 12;
+  uint32 end_line = 13;
+}
+
+message ListCommentsResponse { repeated Comment comments = 1; }
+
+message AddCommentRequest {
+  ChangeRequestRef ref = 1;
+  string body = 2;
+  string path = 3;
+  uint32 line = 4;
+  uint32 end_line = 5;
+  bool on_base = 6;
+  string thread = 7;
+  string suggestion = 8;
+}
+
+// Changes a comment's text, or deletes it with an empty body. Its author (or the person an
+// agent author answers to) may do either; a repository administrator may also delete. A deleted
+// comment keeps its place in its thread, with no text.
+message EditCommentRequest {
+  RepositoryRef repository = 1;
+  // The change request or issue the comment is on.
+  uint64 number = 2;
+  string id = 3;
+  string body = 4;
+}
+
+message ResolveThreadRequest {
+  ChangeRequestRef ref = 1;
+  string thread = 2;
+  bool resolved = 3;
+}
+
+message SubmitReviewRequest {
+  ChangeRequestRef ref = 1;
+  Verdict verdict = 2;
+  string body = 3;
+}
+
+message LandChangeRequestResponse {
+  ChangeRequest change_request = 1;
+  bytes landed_as = 2;
+}
+
+message Protection {
+  RepositoryRef repository = 1;
+  // A branch name or pattern (`main`, `release/*`).
+  string pattern = 2;
+  uint32 required_approvals = 3;
+  repeated string required_checks = 4;
+  // Approvals go stale when the source changes.
+  bool dismiss_stale = 5;
+  // Agents may land directly; otherwise their land opens a change request.
+  bool agents_land_directly = 6;
+  // Who may land without review (admins, a team, a person).
+  repeated string bypass = 7;
+  // Stricter review where it matters: e.g. two people must approve when an agent changes auth/.
+  repeated ReviewRule rules = 8;
+  // A change request landing here by itself is first built on the branch's current tip and
+  // tested (Runs); the branch moves to exactly what passed, or not at all.
+  bool test_before_landing = 9;
+}
+
+// A review rule: when a change request touches `paths` (and, with `agents_only`, an agent
+// opened it), it needs `human_approvals` approvals from people. Agents' approvals don't count.
+message ReviewRule {
+  // Folders it covers, like `auth` or `services/billing`; empty: every path.
+  repeated string paths = 1;
+  bool agents_only = 2;
+  uint32 human_approvals = 3;
+}
+message ListProtectionsResponse { repeated Protection protections = 1; }
+message ProtectionRef {
+  RepositoryRef repository = 1;
+  string pattern = 2;
+}
+
+// A CI result for the change request's current version; a new version starts with none.
+message ReportCheckRequest {
+  ChangeRequestRef ref = 1;
+  Check check = 2;
+}
+
+enum EventKind {
+  EVENT_KIND_UNSPECIFIED = 0;
+  EVENT_KIND_LANDED = 1;
+  EVENT_KIND_CHANGE_REQUEST_OPENED = 2;
+  EVENT_KIND_REVIEWED = 3;
+  EVENT_KIND_COMMENTED_ON = 4;
+  EVENT_KIND_CHANGE_REQUEST_LANDED = 5;
+  EVENT_KIND_CHANGE_REQUEST_CLOSED = 6;
+  EVENT_KIND_LOCKED = 7;
+  EVENT_KIND_UNLOCKED = 8;
+  EVENT_KIND_REPOSITORY_CREATED = 9;
+  EVENT_KIND_ISSUE_OPENED = 10;
+  EVENT_KIND_ISSUE_CLOSED = 11;
+  EVENT_KIND_RELEASE_PUBLISHED = 12;
+}
+
+message Event {
+  string id = 1;
+  EventKind kind = 2;
+  string actor = 3;
+  RepositoryRef repository = 4;
+  int64 at_ms = 5;
+  uint64 change_request = 6;
+  bytes changeset = 7;
+  string summary = 8;
+  // The issue's or change request's title (`change_request` names it), filled when listed.
+  string title = 9;
+}
+
+message InboxRequest { uint32 limit = 1; }
+message InboxItem {
+  // One of: a change request, an issue assigned to you, or a note (a mention, an agent of yours
+  // in trouble).
+  ChangeRequest change_request = 1;
+  Issue issue = 4;
+  InboxNote note = 5;
+  // Why it is in the inbox: "review requested", "changes requested on yours", "agent waiting".
+  string reason = 2;
+  bool unread = 3;
+  // For a change request or an issue: the latest thing someone else did on it.
+  Event latest = 6;
+}
+
+// Something that happened to you, once: a mention, a failed check or a refused land of an
+// agent you answer for.
+message InboxNote {
+  string id = 1;
+  // mention, check or refused.
+  string kind = 2;
+  RepositoryRef repository = 3;
+  // The issue or change request (0 for a refused land, which has none).
+  uint64 number = 4;
+  // Its title; for a refused land, why.
+  string title = 5;
+  // Who did it (who mentioned you; the agent whose check failed or land was refused).
+  string actor = 6;
+  // For a mention: the words around it.
+  string excerpt = 7;
+  // For a mention in a comment: the comment's id (empty: in the description).
+  string anchor = 8;
+  int64 at_ms = 9;
+  bool change_request = 10;
+}
+message InboxResponse { repeated InboxItem items = 1; }
+
+// Marks inbox items read, or done: a done item leaves the inbox until something new happens on
+// it. Items name a change request or issue by repository and number.
+message MarkInboxRequest {
+  message Item {
+    RepositoryRef repository = 1;
+    uint64 number = 2;
+  }
+  repeated Item items = 1;
+  bool done = 2;
+  // Notes (InboxNote.id) seen or done.
+  repeated string notes = 3;
+}
+
+message ListEventsRequest {
+  // Empty: every repository the caller can read.
+  RepositoryRef repository = 1;
+  string actor = 2;
+  uint32 limit = 3;
+  string page_token = 4;
+  // Across repositories: only those the caller is involved in (as for ListRepositories).
+  bool involved = 5;
+}
+message ListEventsResponse {
+  repeated Event events = 1;
+  string next_page_token = 2;
+}
+
+// ---- issues ----
+
+enum IssueState {
+  ISSUE_STATE_UNSPECIFIED = 0;
+  ISSUE_STATE_OPEN = 1;
+  // Done, by hand or by a change request that said "fixes #N" landing.
+  ISSUE_STATE_COMPLETED = 2;
+  ISSUE_STATE_NOT_PLANNED = 3;
+}
+
+// Issues and change requests share one numbering per repository, so `#12` names one thing.
+message Issue {
+  RepositoryRef repository = 1;
+  uint64 number = 2;
+  string title = 3;
+  string body = 4;
+  string author = 5;
+  IssueState state = 6;
+  repeated string labels = 7;
+  // People or agents working on it.
+  repeated string assignees = 8;
+  int64 created_at_ms = 9;
+  int64 updated_at_ms = 10;
+  int64 closed_at_ms = 11;
+  uint32 comments = 12;
+  // Change requests that say they fix it.
+  repeated uint64 fixed_by = 13;
+  // Issues and change requests that mention it (#12); filled in when one issue is read.
+  repeated uint64 referenced_by = 14;
+  // The milestone it's planned for (its number); 0: none.
+  uint64 milestone = 15;
+}
+
+// Counts for narrowing a list: how many in each view, and the labels, assignees, authors or
+// reviewers in use (most used first).
+message FacetCount {
+  string key = 1;
+  uint64 count = 2;
+}
+message Facets {
+  repeated FacetCount views = 1;
+  // Issues: labels and assignees of open issues. Change requests: authors and reviewers of
+  // open ones.
+  repeated FacetCount first = 2;
+  repeated FacetCount second = 3;
+}
+
+service Reviews {
+  rpc ListChangeRequests(ListChangeRequestsRequest) returns (ListChangeRequestsResponse);
+  // Views: attention, open, ready, blocked, agents, mine, drafts, landed, closed.
+  rpc ChangeRequestFacets(RepositoryRef) returns (Facets);
+  rpc GetChangeRequest(ChangeRequestRef) returns (ChangeRequest);
+  rpc CreateChangeRequest(CreateChangeRequestRequest) returns (ChangeRequest);
+  rpc UpdateChangeRequest(UpdateChangeRequestRequest) returns (ChangeRequest);
+  rpc ListComments(ChangeRequestRef) returns (ListCommentsResponse);
+  rpc AddComment(AddCommentRequest) returns (Comment);
+  rpc EditComment(EditCommentRequest) returns (Comment);
+  rpc ResolveThread(ResolveThreadRequest) returns (Comment);
+  rpc SubmitReview(SubmitReviewRequest) returns (ChangeRequest);
+  rpc Land(ChangeRequestRef) returns (LandChangeRequestResponse);
+  // Re-applies the change on the target's tip. Edits that do not overlap what landed since are
+  // carried over; otherwise it fails with FAILED_PRECONDITION naming the files that conflict.
+  // Approvals made on the old version stop counting when the protection says so.
+  // Replays the branch's changes on the target's tip. Files both changed are merged line by
+  // line; it fails only where their edits clash (see Conflicts).
+  rpc Rebase(ChangeRequestRef) returns (ChangeRequest);
+  // Where a change request clashes with its target, file by file: the three versions, and the
+  // merge (clean, or with conflict markers where the edits clash).
+  rpc Conflicts(ChangeRequestRef) returns (ConflictReport);
+  // Rebases with the clashing files settled: each given in full, or deleted. Files that merge
+  // cleanly needn't be given.
+  rpc ResolveConflicts(ResolveConflictsRequest) returns (ChangeRequest);
+  // Undoes everything an agent landed on a branch since a time, as one change request (or,
+  // with dry_run, says what that would undo). Later changes by others to the same files are
+  // kept where they don't overlap; where they do, the file is left as it is and listed.
+  rpc RevertAgent(RevertAgentRequest) returns (RevertPlan);
+  rpc ListProtections(RepositoryRef) returns (ListProtectionsResponse);
+  rpc SetProtection(Protection) returns (Protection);
+  rpc DeleteProtection(ProtectionRef) returns (Empty);
+  rpc ReportCheck(ReportCheckRequest) returns (ChangeRequest);
+  rpc Inbox(InboxRequest) returns (InboxResponse);
+  rpc MarkInbox(MarkInboxRequest) returns (Empty);
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+}
+
+// ---- invitations ----
+
+message Invitation {
+  string id = 1;
+  string org = 2;
+  // Where the link was sent; whoever has the link may accept it.
+  string email = 3;
+  Role role = 4;
+  string invited_by = 5;
+  int64 created_at_ms = 6;
+  int64 expires_at_ms = 7;
+}
+message CreateInvitationRequest {
+  string org = 1;
+  string email = 2;
+  // ROLE_UNSPECIFIED: read.
+  Role role = 3;
+}
+message CreateInvitationResponse {
+  Invitation invitation = 1;
+  // The link, shown once, to share by hand when the server sends no mail.
+  string link = 2;
+  bool emailed = 3;
+}
+message ListInvitationsResponse { repeated Invitation invitations = 1; }
+message InvitationRef {
+  string org = 1;
+  string id = 2;
+}
+
+// ---- plans, usage and licences (ADR-035) ----
+
+// What an organisation may use. An unset limit is unlimited.
+message OrgLimits {
+  optional uint64 seats = 1;
+  // Agents that land at least one change in a calendar month (UTC).
+  optional uint64 active_agents = 2;
+  optional uint64 storage_bytes = 3;
+  optional uint64 private_repos = 4;
+  // Set only by SetSuspended; SetLimits leaves it as it is.
+  bool suspended = 5;
+  string plan_label = 6;
+  // Calls a minute each person or agent may make to the organisation's repositories (anonymous
+  // readers of public repositories share four times this); beyond it, RESOURCE_EXHAUSTED.
+  optional uint64 calls_per_minute = 7;
+  // Minutes a calendar month (UTC) of jobs on the server's hosted runners; your own runners
+  // are never counted.
+  optional uint64 hosted_minutes = 8;
+  // Jobs at once on hosted runners.
+  optional uint64 hosted_jobs = 9;
+}
+
+message GetUsageRequest {
+  string org = 1;
+  // `YYYY-MM`; empty: this month (UTC).
+  string month = 2;
+}
+
+message ActiveAgent {
+  string login = 1;
+  // When it first landed a change in the month.
+  int64 first_at_ms = 2;
+}
+
+message Usage {
+  string org = 1;
+  string month = 2;
+  repeated ActiveAgent active_agents = 3;
+  // People (not agents) who are members.
+  uint32 seats = 4;
+  // At the last measurement (hourly), and the month's highest.
+  uint64 storage_bytes = 5;
+  uint64 peak_storage_bytes = 6;
+  int64 storage_measured_at_ms = 7;
+  uint32 private_repos = 8;
+  // The limits that apply now: the organisation's own, or the server's defaults.
+  OrgLimits limits = 9;
+  // Limits are enforced (`--multi-tenant`).
+  bool enforced = 10;
+  // Minutes of hosted runners used this month (each job rounded up to a minute).
+  uint64 hosted_minutes_used = 11;
+  // Hosted runners online on this server now (0: it offers none).
+  uint32 hosted_runners_online = 12;
+}
+
+message SetLimitsRequest {
+  string org = 1;
+  OrgLimits limits = 2;
+}
+
+message SetSuspendedRequest {
+  string org = 1;
+  bool suspended = 2;
+}
+
+message Capabilities {
+  // Where organisation administrators change their plan; empty: nowhere.
+  string billing_url = 1;
+  // Organisations have limits (`--multi-tenant`).
+  bool limits = 2;
+  // Where people reach support (mailto: or https:); empty: not given.
+  string support_url = 3;
+  // Stock git clones and pushes over HTTPS (`git clone https://HOST/OWNER/NAME.git`).
+  bool git_http = 4;
+}
+
+message License {
+  // A licence was given (`--license`).
+  bool present = 1;
+  // valid, grace, expired or invalid.
+  string status = 2;
+  // Why it is invalid.
+  string error = 3;
+  string licensee = 4;
+  string product = 5;
+  uint32 seats = 6;
+  uint32 agents = 7;
+  int64 issued_at = 8;
+  int64 expires_at = 9;
+  uint32 grace_days = 10;
+}
+
+// ---- conflicts ----
+
+message ConflictFile {
+  string path = 1;
+  // What clashes: "both changed", "both added", "deleted on the target", "deleted on the branch",
+  // "file and folder", "binary", "too large".
+  string kind = 2;
+  // The file where the two sides parted, on the target now, and on the branch; empty when
+  // missing, binary or too large.
+  string base = 3;
+  string target = 4;
+  string source = 5;
+  // True when the edits combine line by line: `merged` is then the result.
+  bool clean = 6;
+  // The merge, with `<<<<<<< target` / `=======` / `>>>>>>> branch` around each clash.
+  string merged = 7;
+  uint32 clashes = 8;
+}
+
+message ConflictReport {
+  string target = 1;
+  string source = 2;
+  // The target's tip the report was made against, and where the two parted.
+  bytes target_tip = 3;
+  bytes base = 4;
+  repeated ConflictFile files = 5;
+}
+
+message FileResolution {
+  string path = 1;
+  // The file's whole content as it should be; ignored when `delete`.
+  string content = 2;
+  bool delete = 3;
+}
+
+message ResolveConflictsRequest {
+  ChangeRequestRef ref = 1;
+  repeated FileResolution files = 2;
+}
+
+// ---- undoing an agent's work ----
+
+message RevertAgentRequest {
+  RepositoryRef repository = 1;
+  // The agent, e.g. agent/acme-claude.
+  string agent = 2;
+  // Undo what it landed at or after this time.
+  int64 since_ms = 3;
+  // The branch; empty: the default branch.
+  string target = 4;
+  bool dry_run = 5;
+}
+
+message RevertedChange {
+  bytes id = 1;
+  string title = 2;
+  int64 at_ms = 3;
+  uint32 files = 4;
+}
+
+message RevertPlan {
+  // The agent's changes being undone, newest first.
+  repeated RevertedChange changes = 1;
+  // Files the undo changes.
+  repeated string files = 2;
+  // Files someone else changed afterwards in the same places: left as they are, for a person
+  // to look at.
+  repeated string clashes = 3;
+  // The change request it opened (not with dry_run, nor when there's nothing to undo).
+  ChangeRequest change_request = 4;
+  // True when the history walked stopped at its limit before reaching `since_ms`.
+  bool stopped = 5;
+}
+
+// What a person gets emailed about: reviews asked of them, assignments, mentions, and failed
+// checks on their (or their agents') changes, gathered into one mail every few minutes.
+message NotificationSettings {
+  // Any email at all.
+  bool email = 1;
+  // Kinds turned off: review, assigned, mention, check.
+  repeated string off = 2;
+  // Where it goes (read-only): the address they signed in with.
+  string address = 3;
+}
+
+message AgentStatsRequest {
+  string org = 1;
+  // Days back (default 14, at most 90).
+  uint32 days = 2;
+}
+
+message AgentStat {
+  string login = 1;
+  string owner = 2;
+  bool paused = 3;
+  // Landed straight on branches, per day, oldest first, and in all.
+  repeated uint32 daily = 4;
+  uint32 lands = 5;
+  uint32 change_requests_opened = 6;
+  uint32 change_requests_landed = 7;
+  uint32 change_requests_closed = 8;
+  // Checks that failed on its change requests.
+  uint32 checks_failed = 9;
+  // Lands it tried that were refused, and the latest reason.
+  uint32 refused = 10;
+  string last_refusal = 11;
+  int64 last_active_ms = 12;
+  // What it can reach: its role here (empty: its owner's), the repositories its tokens are kept
+  // to (empty: any it has a role in), and the paths it may change (empty: any).
+  string role = 13;
+  repeated string repositories = 14;
+  repeated string allowed_paths = 15;
+  // Its daily budgets and what it used today (UTC).
+  optional uint32 lands_per_day = 16;
+  optional uint32 runs_per_day = 17;
+  uint32 lands_today = 18;
+  uint32 runs_today = 19;
+}
+
+message AgentStatsResponse {
+  repeated AgentStat agents = 1;
+  int64 from_ms = 2;
+  uint32 days = 3;
+  // Every agent is stopped from writing here, by this person.
+  bool agents_paused = 4;
+  string agents_paused_by = 5;
+}
+
+message AgentActivityRequest {
+  string org = 1;
+  string agent = 2;
+  // Days back (default 7, at most 7: calls are kept a week).
+  uint32 days = 3;
+}
+
+// One thing an agent did, or several of the same in a row ("read 14 files").
+message AgentStep {
+  int64 at_ms = 1;
+  int64 until_ms = 2;
+  // read, search, write, land, lock, change request, check, other.
+  string kind = 3;
+  string what = 4;
+  // OWNER/NAME.
+  string repo = 5;
+  bool ok = 6;
+  // Why it failed, or the change's title.
+  string detail = 7;
+  uint32 count = 8;
+  // The change request or issue it's about, when there is one.
+  uint64 number = 9;
+}
+
+// Steps with no gap of 20 minutes or more between them.
+message AgentSession {
+  int64 start_ms = 1;
+  int64 end_ms = 2;
+  repeated string repos = 3;
+  repeated AgentStep steps = 4;
+  uint32 failed = 5;
+}
+
+message AgentActivityResponse {
+  // Newest first.
+  repeated AgentSession sessions = 1;
+  string owner = 2;
+  bool paused = 3;
+}
