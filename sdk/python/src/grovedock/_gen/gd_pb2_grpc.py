@@ -201,6 +201,11 @@ class ChangesetsStub:
                 request_serializer=gd__pb2.CreateChangesetRequest.SerializeToString,
                 response_deserializer=gd__pb2.ChangesetInfo.FromString,
                 _registered_method=True)
+        self.CreateMany = channel.stream_stream(
+                '/gd.v1.Changesets/CreateMany',
+                request_serializer=gd__pb2.CreateChangesetRequest.SerializeToString,
+                response_deserializer=gd__pb2.CreatedChangeset.FromString,
+                _registered_method=True)
         self.Get = channel.unary_unary(
                 '/gd.v1.Changesets/Get',
                 request_serializer=gd__pb2.ResolveRequest.SerializeToString,
@@ -213,6 +218,15 @@ class ChangesetsServicer:
 
     def Create(self, request, context):
         """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateMany(self, request_iterator, context):
+        """Creates changes in the order sent and answers each with its id, so a client sends a whole
+        history without waiting a round trip per change (imports, git pushes). Parents may refer to
+        changes made earlier on the stream. At most 10,000 changes per call.
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -230,6 +244,11 @@ def add_ChangesetsServicer_to_server(servicer, server):
                     servicer.Create,
                     request_deserializer=gd__pb2.CreateChangesetRequest.FromString,
                     response_serializer=gd__pb2.ChangesetInfo.SerializeToString,
+            ),
+            'CreateMany': grpc.stream_stream_rpc_method_handler(
+                    servicer.CreateMany,
+                    request_deserializer=gd__pb2.CreateChangesetRequest.FromString,
+                    response_serializer=gd__pb2.CreatedChangeset.SerializeToString,
             ),
             'Get': grpc.unary_unary_rpc_method_handler(
                     servicer.Get,
@@ -275,6 +294,33 @@ class Changesets:
             _registered_method=True)
 
     @staticmethod
+    def CreateMany(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_stream(
+            request_iterator,
+            target,
+            '/gd.v1.Changesets/CreateMany',
+            gd__pb2.CreateChangesetRequest.SerializeToString,
+            gd__pb2.CreatedChangeset.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
     def Get(request,
             target,
             options=(),
@@ -303,7 +349,10 @@ class Changesets:
 
 
 class RefsStub:
-    """Missing associated documentation comment in .proto file."""
+    """Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+    (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+    lands on one. Git sees them as refs/tags/*.
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -329,7 +378,10 @@ class RefsStub:
 
 
 class RefsServicer:
-    """Missing associated documentation comment in .proto file."""
+    """Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+    (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+    lands on one. Git sees them as refs/tags/*.
+    """
 
     def Get(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -376,7 +428,10 @@ def add_RefsServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class Refs:
-    """Missing associated documentation comment in .proto file."""
+    """Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+    (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+    lands on one. Git sees them as refs/tags/*.
+    """
 
     @staticmethod
     def Get(request,
@@ -554,6 +609,16 @@ class HistoryStub:
                 request_serializer=gd__pb2.BlameRequest.SerializeToString,
                 response_deserializer=gd__pb2.BlameResponse.FromString,
                 _registered_method=True)
+        self.AttachGitAiNote = channel.unary_unary(
+                '/gd.v1.History/AttachGitAiNote',
+                request_serializer=gd__pb2.AttachGitAiNoteRequest.SerializeToString,
+                response_deserializer=gd__pb2.Empty.FromString,
+                _registered_method=True)
+        self.GitAiNote = channel.unary_unary(
+                '/gd.v1.History/GitAiNote',
+                request_serializer=gd__pb2.IdMsg.SerializeToString,
+                response_deserializer=gd__pb2.GitAiNoteResponse.FromString,
+                _registered_method=True)
 
 
 class HistoryServicer:
@@ -571,6 +636,21 @@ class HistoryServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AttachGitAiNote(self, request, context):
+        """Keeps which lines of an imported change an agent wrote. Only for changes that came from
+        git (their notes are the source repository's claim); needs write access.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GitAiNote(self, request, context):
+        """The git-ai note kept with a change that came from git; empty when there is none.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_HistoryServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -583,6 +663,16 @@ def add_HistoryServicer_to_server(servicer, server):
                     servicer.Blame,
                     request_deserializer=gd__pb2.BlameRequest.FromString,
                     response_serializer=gd__pb2.BlameResponse.SerializeToString,
+            ),
+            'AttachGitAiNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.AttachGitAiNote,
+                    request_deserializer=gd__pb2.AttachGitAiNoteRequest.FromString,
+                    response_serializer=gd__pb2.Empty.SerializeToString,
+            ),
+            'GitAiNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.GitAiNote,
+                    request_deserializer=gd__pb2.IdMsg.FromString,
+                    response_serializer=gd__pb2.GitAiNoteResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -639,6 +729,60 @@ class History:
             '/gd.v1.History/Blame',
             gd__pb2.BlameRequest.SerializeToString,
             gd__pb2.BlameResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AttachGitAiNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gd.v1.History/AttachGitAiNote',
+            gd__pb2.AttachGitAiNoteRequest.SerializeToString,
+            gd__pb2.Empty.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GitAiNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gd.v1.History/GitAiNote',
+            gd__pb2.IdMsg.SerializeToString,
+            gd__pb2.GitAiNoteResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -794,9 +938,123 @@ class MergeBase:
             _registered_method=True)
 
 
+class CodeSearchStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.SearchCode = channel.unary_unary(
+                '/gd.v1.CodeSearch/SearchCode',
+                request_serializer=gd__pb2.SearchCodeRequest.SerializeToString,
+                response_deserializer=gd__pb2.SearchCodeResponse.FromString,
+                _registered_method=True)
+        self.FindSymbol = channel.unary_unary(
+                '/gd.v1.CodeSearch/FindSymbol',
+                request_serializer=gd__pb2.FindSymbolRequest.SerializeToString,
+                response_deserializer=gd__pb2.FindSymbolResponse.FromString,
+                _registered_method=True)
+
+
+class CodeSearchServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def SearchCode(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def FindSymbol(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_CodeSearchServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'SearchCode': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchCode,
+                    request_deserializer=gd__pb2.SearchCodeRequest.FromString,
+                    response_serializer=gd__pb2.SearchCodeResponse.SerializeToString,
+            ),
+            'FindSymbol': grpc.unary_unary_rpc_method_handler(
+                    servicer.FindSymbol,
+                    request_deserializer=gd__pb2.FindSymbolRequest.FromString,
+                    response_serializer=gd__pb2.FindSymbolResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'gd.v1.CodeSearch', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('gd.v1.CodeSearch', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class CodeSearch:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def SearchCode(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gd.v1.CodeSearch/SearchCode',
+            gd__pb2.SearchCodeRequest.SerializeToString,
+            gd__pb2.SearchCodeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def FindSymbol(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/gd.v1.CodeSearch/FindSymbol',
+            gd__pb2.FindSymbolRequest.SerializeToString,
+            gd__pb2.FindSymbolResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+
 class BrowseStub:
-    """API-first file access: CI and tools read source without any checkout.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -827,8 +1085,7 @@ class BrowseStub:
 
 
 class BrowseServicer:
-    """API-first file access: CI and tools read source without any checkout.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def ListDir(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -888,8 +1145,7 @@ def add_BrowseServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class Browse:
-    """API-first file access: CI and tools read source without any checkout.
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def ListDir(request,

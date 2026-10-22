@@ -203,8 +203,9 @@ var Objects_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Changesets_Create_FullMethodName = "/gd.v1.Changesets/Create"
-	Changesets_Get_FullMethodName    = "/gd.v1.Changesets/Get"
+	Changesets_Create_FullMethodName     = "/gd.v1.Changesets/Create"
+	Changesets_CreateMany_FullMethodName = "/gd.v1.Changesets/CreateMany"
+	Changesets_Get_FullMethodName        = "/gd.v1.Changesets/Get"
 )
 
 // ChangesetsClient is the client API for Changesets service.
@@ -212,6 +213,10 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ChangesetsClient interface {
 	Create(ctx context.Context, in *CreateChangesetRequest, opts ...grpc.CallOption) (*ChangesetInfo, error)
+	// Creates changes in the order sent and answers each with its id, so a client sends a whole
+	// history without waiting a round trip per change (imports, git pushes). Parents may refer to
+	// changes made earlier on the stream. At most 10,000 changes per call.
+	CreateMany(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CreateChangesetRequest, CreatedChangeset], error)
 	Get(ctx context.Context, in *ResolveRequest, opts ...grpc.CallOption) (*ChangesetInfo, error)
 }
 
@@ -233,6 +238,19 @@ func (c *changesetsClient) Create(ctx context.Context, in *CreateChangesetReques
 	return out, nil
 }
 
+func (c *changesetsClient) CreateMany(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[CreateChangesetRequest, CreatedChangeset], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &Changesets_ServiceDesc.Streams[0], Changesets_CreateMany_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[CreateChangesetRequest, CreatedChangeset]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Changesets_CreateManyClient = grpc.BidiStreamingClient[CreateChangesetRequest, CreatedChangeset]
+
 func (c *changesetsClient) Get(ctx context.Context, in *ResolveRequest, opts ...grpc.CallOption) (*ChangesetInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChangesetInfo)
@@ -248,6 +266,10 @@ func (c *changesetsClient) Get(ctx context.Context, in *ResolveRequest, opts ...
 // for forward compatibility.
 type ChangesetsServer interface {
 	Create(context.Context, *CreateChangesetRequest) (*ChangesetInfo, error)
+	// Creates changes in the order sent and answers each with its id, so a client sends a whole
+	// history without waiting a round trip per change (imports, git pushes). Parents may refer to
+	// changes made earlier on the stream. At most 10,000 changes per call.
+	CreateMany(grpc.BidiStreamingServer[CreateChangesetRequest, CreatedChangeset]) error
 	Get(context.Context, *ResolveRequest) (*ChangesetInfo, error)
 	mustEmbedUnimplementedChangesetsServer()
 }
@@ -261,6 +283,9 @@ type UnimplementedChangesetsServer struct{}
 
 func (UnimplementedChangesetsServer) Create(context.Context, *CreateChangesetRequest) (*ChangesetInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method Create not implemented")
+}
+func (UnimplementedChangesetsServer) CreateMany(grpc.BidiStreamingServer[CreateChangesetRequest, CreatedChangeset]) error {
+	return status.Error(codes.Unimplemented, "method CreateMany not implemented")
 }
 func (UnimplementedChangesetsServer) Get(context.Context, *ResolveRequest) (*ChangesetInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method Get not implemented")
@@ -304,6 +329,13 @@ func _Changesets_Create_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Changesets_CreateMany_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(ChangesetsServer).CreateMany(&grpc.GenericServerStream[CreateChangesetRequest, CreatedChangeset]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type Changesets_CreateManyServer = grpc.BidiStreamingServer[CreateChangesetRequest, CreatedChangeset]
+
 func _Changesets_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveRequest)
 	if err := dec(in); err != nil {
@@ -338,7 +370,14 @@ var Changesets_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Changesets_Get_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "CreateMany",
+			Handler:       _Changesets_CreateMany_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "gd.proto",
 }
 
@@ -351,6 +390,10 @@ const (
 // RefsClient is the client API for Refs service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+// (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+// lands on one. Git sees them as refs/tags/*.
 type RefsClient interface {
 	Get(ctx context.Context, in *RefName, opts ...grpc.CallOption) (*RefValue, error)
 	CompareAndSwap(ctx context.Context, in *CasRequest, opts ...grpc.CallOption) (*CasResponse, error)
@@ -398,6 +441,10 @@ func (c *refsClient) List(ctx context.Context, in *Empty, opts ...grpc.CallOptio
 // RefsServer is the server API for Refs service.
 // All implementations must embed UnimplementedRefsServer
 // for forward compatibility.
+//
+// Refs name changesets: branches, and tags under `tags/` (`tags/v1.2.0`). A tag is made once
+// (CompareAndSwap from nothing) and never moves: swapping an existing tag fails, and nothing
+// lands on one. Git sees them as refs/tags/*.
 type RefsServer interface {
 	Get(context.Context, *RefName) (*RefValue, error)
 	CompareAndSwap(context.Context, *CasRequest) (*CasResponse, error)
@@ -627,8 +674,10 @@ var Land_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	History_Log_FullMethodName   = "/gd.v1.History/Log"
-	History_Blame_FullMethodName = "/gd.v1.History/Blame"
+	History_Log_FullMethodName             = "/gd.v1.History/Log"
+	History_Blame_FullMethodName           = "/gd.v1.History/Blame"
+	History_AttachGitAiNote_FullMethodName = "/gd.v1.History/AttachGitAiNote"
+	History_GitAiNote_FullMethodName       = "/gd.v1.History/GitAiNote"
 )
 
 // HistoryClient is the client API for History service.
@@ -637,6 +686,11 @@ const (
 type HistoryClient interface {
 	Log(ctx context.Context, in *LogRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ChangesetInfo], error)
 	Blame(ctx context.Context, in *BlameRequest, opts ...grpc.CallOption) (*BlameResponse, error)
+	// Keeps which lines of an imported change an agent wrote. Only for changes that came from
+	// git (their notes are the source repository's claim); needs write access.
+	AttachGitAiNote(ctx context.Context, in *AttachGitAiNoteRequest, opts ...grpc.CallOption) (*Empty, error)
+	// The git-ai note kept with a change that came from git; empty when there is none.
+	GitAiNote(ctx context.Context, in *IdMsg, opts ...grpc.CallOption) (*GitAiNoteResponse, error)
 }
 
 type historyClient struct {
@@ -676,12 +730,37 @@ func (c *historyClient) Blame(ctx context.Context, in *BlameRequest, opts ...grp
 	return out, nil
 }
 
+func (c *historyClient) AttachGitAiNote(ctx context.Context, in *AttachGitAiNoteRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, History_AttachGitAiNote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *historyClient) GitAiNote(ctx context.Context, in *IdMsg, opts ...grpc.CallOption) (*GitAiNoteResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GitAiNoteResponse)
+	err := c.cc.Invoke(ctx, History_GitAiNote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HistoryServer is the server API for History service.
 // All implementations must embed UnimplementedHistoryServer
 // for forward compatibility.
 type HistoryServer interface {
 	Log(*LogRequest, grpc.ServerStreamingServer[ChangesetInfo]) error
 	Blame(context.Context, *BlameRequest) (*BlameResponse, error)
+	// Keeps which lines of an imported change an agent wrote. Only for changes that came from
+	// git (their notes are the source repository's claim); needs write access.
+	AttachGitAiNote(context.Context, *AttachGitAiNoteRequest) (*Empty, error)
+	// The git-ai note kept with a change that came from git; empty when there is none.
+	GitAiNote(context.Context, *IdMsg) (*GitAiNoteResponse, error)
 	mustEmbedUnimplementedHistoryServer()
 }
 
@@ -697,6 +776,12 @@ func (UnimplementedHistoryServer) Log(*LogRequest, grpc.ServerStreamingServer[Ch
 }
 func (UnimplementedHistoryServer) Blame(context.Context, *BlameRequest) (*BlameResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Blame not implemented")
+}
+func (UnimplementedHistoryServer) AttachGitAiNote(context.Context, *AttachGitAiNoteRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachGitAiNote not implemented")
+}
+func (UnimplementedHistoryServer) GitAiNote(context.Context, *IdMsg) (*GitAiNoteResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GitAiNote not implemented")
 }
 func (UnimplementedHistoryServer) mustEmbedUnimplementedHistoryServer() {}
 func (UnimplementedHistoryServer) testEmbeddedByValue()                 {}
@@ -748,6 +833,42 @@ func _History_Blame_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _History_AttachGitAiNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachGitAiNoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HistoryServer).AttachGitAiNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: History_AttachGitAiNote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HistoryServer).AttachGitAiNote(ctx, req.(*AttachGitAiNoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _History_GitAiNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IdMsg)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HistoryServer).GitAiNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: History_GitAiNote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HistoryServer).GitAiNote(ctx, req.(*IdMsg))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // History_ServiceDesc is the grpc.ServiceDesc for History service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -758,6 +879,14 @@ var History_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Blame",
 			Handler:    _History_Blame_Handler,
+		},
+		{
+			MethodName: "AttachGitAiNote",
+			Handler:    _History_AttachGitAiNote_Handler,
+		},
+		{
+			MethodName: "GitAiNote",
+			Handler:    _History_GitAiNote_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -975,6 +1104,146 @@ var MergeBase_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
+	CodeSearch_SearchCode_FullMethodName = "/gd.v1.CodeSearch/SearchCode"
+	CodeSearch_FindSymbol_FullMethodName = "/gd.v1.CodeSearch/FindSymbol"
+)
+
+// CodeSearchClient is the client API for CodeSearch service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type CodeSearchClient interface {
+	SearchCode(ctx context.Context, in *SearchCodeRequest, opts ...grpc.CallOption) (*SearchCodeResponse, error)
+	FindSymbol(ctx context.Context, in *FindSymbolRequest, opts ...grpc.CallOption) (*FindSymbolResponse, error)
+}
+
+type codeSearchClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewCodeSearchClient(cc grpc.ClientConnInterface) CodeSearchClient {
+	return &codeSearchClient{cc}
+}
+
+func (c *codeSearchClient) SearchCode(ctx context.Context, in *SearchCodeRequest, opts ...grpc.CallOption) (*SearchCodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchCodeResponse)
+	err := c.cc.Invoke(ctx, CodeSearch_SearchCode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *codeSearchClient) FindSymbol(ctx context.Context, in *FindSymbolRequest, opts ...grpc.CallOption) (*FindSymbolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(FindSymbolResponse)
+	err := c.cc.Invoke(ctx, CodeSearch_FindSymbol_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// CodeSearchServer is the server API for CodeSearch service.
+// All implementations must embed UnimplementedCodeSearchServer
+// for forward compatibility.
+type CodeSearchServer interface {
+	SearchCode(context.Context, *SearchCodeRequest) (*SearchCodeResponse, error)
+	FindSymbol(context.Context, *FindSymbolRequest) (*FindSymbolResponse, error)
+	mustEmbedUnimplementedCodeSearchServer()
+}
+
+// UnimplementedCodeSearchServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedCodeSearchServer struct{}
+
+func (UnimplementedCodeSearchServer) SearchCode(context.Context, *SearchCodeRequest) (*SearchCodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchCode not implemented")
+}
+func (UnimplementedCodeSearchServer) FindSymbol(context.Context, *FindSymbolRequest) (*FindSymbolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindSymbol not implemented")
+}
+func (UnimplementedCodeSearchServer) mustEmbedUnimplementedCodeSearchServer() {}
+func (UnimplementedCodeSearchServer) testEmbeddedByValue()                    {}
+
+// UnsafeCodeSearchServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to CodeSearchServer will
+// result in compilation errors.
+type UnsafeCodeSearchServer interface {
+	mustEmbedUnimplementedCodeSearchServer()
+}
+
+func RegisterCodeSearchServer(s grpc.ServiceRegistrar, srv CodeSearchServer) {
+	// If the following call panics, it indicates UnimplementedCodeSearchServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&CodeSearch_ServiceDesc, srv)
+}
+
+func _CodeSearch_SearchCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchCodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CodeSearchServer).SearchCode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CodeSearch_SearchCode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CodeSearchServer).SearchCode(ctx, req.(*SearchCodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CodeSearch_FindSymbol_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindSymbolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CodeSearchServer).FindSymbol(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CodeSearch_FindSymbol_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CodeSearchServer).FindSymbol(ctx, req.(*FindSymbolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// CodeSearch_ServiceDesc is the grpc.ServiceDesc for CodeSearch service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var CodeSearch_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "gd.v1.CodeSearch",
+	HandlerType: (*CodeSearchServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SearchCode",
+			Handler:    _CodeSearch_SearchCode_Handler,
+		},
+		{
+			MethodName: "FindSymbol",
+			Handler:    _CodeSearch_FindSymbol_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "gd.proto",
+}
+
+const (
 	Browse_ListDir_FullMethodName  = "/gd.v1.Browse/ListDir"
 	Browse_ReadFile_FullMethodName = "/gd.v1.Browse/ReadFile"
 	Browse_Find_FullMethodName     = "/gd.v1.Browse/Find"
@@ -984,8 +1253,6 @@ const (
 // BrowseClient is the client API for Browse service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// API-first file access: CI and tools read source without any checkout.
 type BrowseClient interface {
 	ListDir(ctx context.Context, in *BrowseRequest, opts ...grpc.CallOption) (*ListDirResponse, error)
 	ReadFile(ctx context.Context, in *BrowseRequest, opts ...grpc.CallOption) (*ReadFileResponse, error)
@@ -1055,8 +1322,6 @@ type Browse_CheckoutClient = grpc.ServerStreamingClient[CheckoutPiece]
 // BrowseServer is the server API for Browse service.
 // All implementations must embed UnimplementedBrowseServer
 // for forward compatibility.
-//
-// API-first file access: CI and tools read source without any checkout.
 type BrowseServer interface {
 	ListDir(context.Context, *BrowseRequest) (*ListDirResponse, error)
 	ReadFile(context.Context, *BrowseRequest) (*ReadFileResponse, error)

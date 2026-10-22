@@ -6,7 +6,9 @@
 <title>Pricing: {{NAME}}</title>
 <meta name="description" content="{{NAME}} is free for up to {{FREE_PEOPLE}} people and {{FREE_AGENTS}} active agents. Team is priced per person and per active agent, billed in rupees, with idle agents free.">
 <link rel="canonical" href="{{SITE_URL}}pricing.html">
+<link rel="icon" href="favicon.ico" sizes="32x32">
 <link rel="icon" href="mark.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/schibsted-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="site.css">
 <style>
@@ -14,7 +16,7 @@
   .head h1 { font-size: clamp(2.75rem, 6.4vw, 5rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; margin: 0 0 1.25rem; }
   .head > p { font-size: clamp(1.1rem, 1.5vw, 1.3rem); color: var(--muted); margin: 0; max-width: 34rem; }
   .promises { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; margin-top: 2.5rem; max-width: 50rem; }
-  .promises p { margin: 0; padding-left: 1rem; border-left: 2px solid var(--gold); color: var(--muted); }
+  .promises p { margin: 0; padding-left: 1rem; border-left: 2px solid var(--lichen); color: var(--muted); }
   .promises strong { color: var(--ink); }
   .tiers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: clamp(-4rem, -7vw, -3rem); position: relative; overflow: hidden; }
   .tier { padding: clamp(1.4rem, 2.5vw, 2rem); display: flex; flex-direction: column; }
@@ -169,7 +171,7 @@
     </details>
     <details>
       <summary>Can we leave?</summary>
-      <p>Any time. <code>gd export-git</code> writes your history to git with identical trees, and the gd protocol and CLI are open source. Cancelling Team keeps your data; the organisation moves to Free.</p>
+      <p>Any time. <code>gd export-git</code> writes your history back to git, the same commits, and the gd protocol and CLI are open source. Cancelling Team keeps your data; the organisation moves to Free.</p>
     </details>
   </div>
 </section>

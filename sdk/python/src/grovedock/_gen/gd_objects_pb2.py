@@ -24,25 +24,29 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10gd_objects.proto\x12\rgd.objects.v1\"H\n\tTreeEntry\x12\x0c\n\x04name\x18\x01 \x01(\t\x12!\n\x04mode\x18\x02 \x01(\x0e\x32\x13.gd.objects.v1.Mode\x12\n\n\x02id\x18\x03 \x01(\x0c\"1\n\x04Tree\x12)\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x18.gd.objects.v1.TreeEntry\"K\n\nFileChange\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12!\n\x04mode\x18\x03 \x01(\x0e\x32\x13.gd.objects.v1.Mode\"\x7f\n\tChangeset\x12\x0f\n\x07parents\x18\x01 \x03(\x0c\x12*\n\x07\x63hanges\x18\x02 \x03(\x0b\x32\x19.gd.objects.v1.FileChange\x12\x0e\n\x06\x61uthor\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x14\n\x0ctimestamp_ms\x18\x05 \x01(\x03\"#\n\x08\x43hunkRef\x12\n\n\x02id\x18\x01 \x01(\x0c\x12\x0b\n\x03len\x18\x02 \x01(\x04\"A\n\x08Manifest\x12\x0c\n\x04size\x18\x01 \x01(\x04\x12\'\n\x06\x63hunks\x18\x02 \x03(\x0b\x32\x17.gd.objects.v1.ChunkRef*0\n\x04Mode\x12\x08\n\x04\x46ILE\x10\x00\x12\x08\n\x04\x45XEC\x10\x01\x12\x0b\n\x07SYMLINK\x10\x02\x12\x07\n\x03\x44IR\x10\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10gd_objects.proto\x12\rgd.objects.v1\"H\n\tTreeEntry\x12\x0c\n\x04name\x18\x01 \x01(\t\x12!\n\x04mode\x18\x02 \x01(\x0e\x32\x13.gd.objects.v1.Mode\x12\n\n\x02id\x18\x03 \x01(\x0c\"1\n\x04Tree\x12)\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x18.gd.objects.v1.TreeEntry\"K\n\nFileChange\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0c\n\x04\x62lob\x18\x02 \x01(\x0c\x12!\n\x04mode\x18\x03 \x01(\x0e\x32\x13.gd.objects.v1.Mode\"\xa6\x01\n\tChangeset\x12\x0f\n\x07parents\x18\x01 \x03(\x0c\x12*\n\x07\x63hanges\x18\x02 \x03(\x0b\x32\x19.gd.objects.v1.FileChange\x12\x0e\n\x06\x61uthor\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\t\x12\x14\n\x0ctimestamp_ms\x18\x05 \x01(\x03\x12%\n\x03git\x18\x06 \x01(\x0b\x32\x18.gd.objects.v1.GitOrigin\"\xbb\x01\n\tGitOrigin\x12\x0e\n\x06\x61uthor\x18\x01 \x01(\t\x12\x11\n\tcommitter\x18\x02 \x01(\t\x12\x10\n\x08\x65ncoding\x18\x03 \x01(\t\x12\x0f\n\x07message\x18\x04 \x01(\x0c\x12\x1b\n\x13signature_algorithm\x18\x05 \x01(\t\x12\x11\n\tsignature\x18\x06 \x01(\x0c\x12(\n\x08gitlinks\x18\x07 \x03(\x0b\x32\x16.gd.objects.v1.Gitlink\x12\x0e\n\x06\x63ommit\x18\x08 \x01(\t\"\'\n\x07Gitlink\x12\x0c\n\x04path\x18\x01 \x01(\t\x12\x0e\n\x06\x63ommit\x18\x02 \x01(\t\"#\n\x08\x43hunkRef\x12\n\n\x02id\x18\x01 \x01(\x0c\x12\x0b\n\x03len\x18\x02 \x01(\x04\"A\n\x08Manifest\x12\x0c\n\x04size\x18\x01 \x01(\x04\x12\'\n\x06\x63hunks\x18\x02 \x03(\x0b\x32\x17.gd.objects.v1.ChunkRef*0\n\x04Mode\x12\x08\n\x04\x46ILE\x10\x00\x12\x08\n\x04\x45XEC\x10\x01\x12\x0b\n\x07SYMLINK\x10\x02\x12\x07\n\x03\x44IR\x10\x03\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'gd_objects_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_MODE']._serialized_start=470
-  _globals['_MODE']._serialized_end=518
+  _globals['_MODE']._serialized_start=741
+  _globals['_MODE']._serialized_end=789
   _globals['_TREEENTRY']._serialized_start=35
   _globals['_TREEENTRY']._serialized_end=107
   _globals['_TREE']._serialized_start=109
   _globals['_TREE']._serialized_end=158
   _globals['_FILECHANGE']._serialized_start=160
   _globals['_FILECHANGE']._serialized_end=235
-  _globals['_CHANGESET']._serialized_start=237
-  _globals['_CHANGESET']._serialized_end=364
-  _globals['_CHUNKREF']._serialized_start=366
-  _globals['_CHUNKREF']._serialized_end=401
-  _globals['_MANIFEST']._serialized_start=403
-  _globals['_MANIFEST']._serialized_end=468
+  _globals['_CHANGESET']._serialized_start=238
+  _globals['_CHANGESET']._serialized_end=404
+  _globals['_GITORIGIN']._serialized_start=407
+  _globals['_GITORIGIN']._serialized_end=594
+  _globals['_GITLINK']._serialized_start=596
+  _globals['_GITLINK']._serialized_end=635
+  _globals['_CHUNKREF']._serialized_start=637
+  _globals['_CHUNKREF']._serialized_end=672
+  _globals['_MANIFEST']._serialized_start=674
+  _globals['_MANIFEST']._serialized_end=739
 # @@protoc_insertion_point(module_scope)

@@ -128,7 +128,7 @@ Prices are in Indian rupees. While we are not registered for GST, no GST is char
 
 | When | What happens |
 |---|---|
-| Before you delete / during notice | You can export your repositories at any time (for example with `gd clone`, or `gd export-git` for a git repository with identical trees). |
+| Before you delete / during notice | You can export your repositories at any time (for example with `gd clone`, or `gd export-git` for a git repository with the same commits). |
 | You delete a repository or account | It is removed from the live Service immediately and permanently deleted from primary storage within **30 days**. |
 | Backups | Encrypted backups containing it roll off and are deleted within **35 days** after deletion from primary storage. |
 | We end the agreement | We keep your data available for export for **30 days** after termination (unless the law or a court order stops us), then delete it on the schedule above. |

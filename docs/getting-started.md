@@ -45,7 +45,7 @@ gd import-git ~/code/my-repo --server https://cloud.grovedock.com/acme/web
 ```
 
 Import is deterministic and incremental: run it again later and it uploads only new commits.
-`gd export-git` goes the other way, with identical trees, and `gd mirror` keeps a git host such
+`gd export-git` goes the other way, with the same commits, and `gd mirror` keeps a git host such
 as GitHub or Bitbucket up to date continuously.
 
 ## 5. Make and land a change

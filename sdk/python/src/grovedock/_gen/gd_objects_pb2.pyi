@@ -45,18 +45,48 @@ class FileChange(_message.Message):
     def __init__(self, path: _Optional[str] = ..., blob: _Optional[bytes] = ..., mode: _Optional[_Union[Mode, str]] = ...) -> None: ...
 
 class Changeset(_message.Message):
-    __slots__ = ("parents", "changes", "author", "message", "timestamp_ms")
+    __slots__ = ("parents", "changes", "author", "message", "timestamp_ms", "git")
     PARENTS_FIELD_NUMBER: _ClassVar[int]
     CHANGES_FIELD_NUMBER: _ClassVar[int]
     AUTHOR_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    GIT_FIELD_NUMBER: _ClassVar[int]
     parents: _containers.RepeatedScalarFieldContainer[bytes]
     changes: _containers.RepeatedCompositeFieldContainer[FileChange]
     author: str
     message: str
     timestamp_ms: int
-    def __init__(self, parents: _Optional[_Iterable[bytes]] = ..., changes: _Optional[_Iterable[_Union[FileChange, _Mapping]]] = ..., author: _Optional[str] = ..., message: _Optional[str] = ..., timestamp_ms: _Optional[int] = ...) -> None: ...
+    git: GitOrigin
+    def __init__(self, parents: _Optional[_Iterable[bytes]] = ..., changes: _Optional[_Iterable[_Union[FileChange, _Mapping]]] = ..., author: _Optional[str] = ..., message: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., git: _Optional[_Union[GitOrigin, _Mapping]] = ...) -> None: ...
+
+class GitOrigin(_message.Message):
+    __slots__ = ("author", "committer", "encoding", "message", "signature_algorithm", "signature", "gitlinks", "commit")
+    AUTHOR_FIELD_NUMBER: _ClassVar[int]
+    COMMITTER_FIELD_NUMBER: _ClassVar[int]
+    ENCODING_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    SIGNATURE_ALGORITHM_FIELD_NUMBER: _ClassVar[int]
+    SIGNATURE_FIELD_NUMBER: _ClassVar[int]
+    GITLINKS_FIELD_NUMBER: _ClassVar[int]
+    COMMIT_FIELD_NUMBER: _ClassVar[int]
+    author: str
+    committer: str
+    encoding: str
+    message: bytes
+    signature_algorithm: str
+    signature: bytes
+    gitlinks: _containers.RepeatedCompositeFieldContainer[Gitlink]
+    commit: str
+    def __init__(self, author: _Optional[str] = ..., committer: _Optional[str] = ..., encoding: _Optional[str] = ..., message: _Optional[bytes] = ..., signature_algorithm: _Optional[str] = ..., signature: _Optional[bytes] = ..., gitlinks: _Optional[_Iterable[_Union[Gitlink, _Mapping]]] = ..., commit: _Optional[str] = ...) -> None: ...
+
+class Gitlink(_message.Message):
+    __slots__ = ("path", "commit")
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    COMMIT_FIELD_NUMBER: _ClassVar[int]
+    path: str
+    commit: str
+    def __init__(self, path: _Optional[str] = ..., commit: _Optional[str] = ...) -> None: ...
 
 class ChunkRef(_message.Message):
     __slots__ = ("id", "len")

@@ -73,6 +73,15 @@ impl Interceptor for BearerAuth {
     }
 }
 
+/// A gRPC endpoint for `url`. An `https://` server is verified against the system's trusted
+/// roots; without this, tonic refuses https ("Connecting to HTTPS without TLS enabled").
+pub fn endpoint(url: impl Into<String>) -> Result<tonic::transport::Endpoint, tonic::transport::Error> {
+    let url = url.into();
+    let https = url.starts_with("https://");
+    let e = tonic::transport::Endpoint::from_shared(url)?;
+    if https { e.tls_config(tonic::transport::ClientTlsConfig::new().with_native_roots()) } else { Ok(e) }
+}
+
 /// Splits `https://host[:port]/OWNER/NAME` into the server address and the repository. A URL
 /// with no path is the server's default repository; any other path is left alone.
 pub fn split_repo_url(url: &str) -> (String, Option<String>) {
@@ -86,6 +95,26 @@ pub fn split_repo_url(url: &str) -> (String, Option<String>) {
         (trimmed[..scheme_end + 3 + slash].to_owned(), Some(path.to_owned()))
     } else {
         (trimmed.to_owned(), None)
+    }
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    /// An https server gets a TLS handshake. Before, tonic refused every https URL outright,
+    /// so the CLI and runners couldn't reach a hosted server at all.
+    #[tokio::test]
+    async fn https_urls_speak_tls() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((s, _)) = listener.accept().await {
+                drop(s); // not a TLS server: the handshake fails, which is the point
+            }
+        });
+        let err = super::endpoint(format!("https://localhost:{}", addr.port())).unwrap().connect().await.unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(!msg.contains("without TLS"), "{msg}");
+        assert!(super::endpoint(format!("http://{addr}")).is_ok());
     }
 }
 

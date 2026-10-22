@@ -24,6 +24,7 @@ cp "$root/site/social-preview.png" "$root/site/site.css" "$out/"
 # The custom domain: the site serves from the root of https://grovedock.com/.
 printf 'grovedock.com\n' > "$out/CNAME"
 cp "$root/docs/assets/brand/mark.svg" "$out/mark.svg"
+cp "$root/docs/assets/brand/favicon.ico" "$root/docs/assets/brand/apple-touch-icon.png" "$out/"
 cp "$root"/docs/assets/charts/*.svg "$out/charts/"
 # Self-hosted fonts (OFL), from the console's pinned dependencies when installed.
 fonts="$root/console/node_modules"

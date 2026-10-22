@@ -17,10 +17,12 @@ use grovedock_core::{Id, paths_overlap};
 
 use super::commit::upload;
 use crate::gitfe::{DataRef, Event, GitCommit, Op, Parser, Writer};
-use crate::remote::Remote;
+use crate::remote::{Parent, Remote};
 use crate::workspace::list_files;
 
 const UPLOAD_FLUSH_BYTES: usize = 32 << 20;
+/// Commits sent to the server in one stream (the server takes at most 10,000 per call).
+pub(crate) const COMMIT_BATCH: usize = 2_000;
 
 #[derive(Debug, Default)]
 pub struct ImportOutcome {
@@ -126,6 +128,9 @@ pub async fn import(
     let mut by_oid: HashMap<String, Id> = HashMap::new();
     let mut pending: Vec<(Id, Bytes)> = Vec::new();
     let mut pending_bytes = 0;
+    // Commits wait here and go to the server together (one stream, no round trip each);
+    // `queued` maps a mark to its position in the batch, for parents inside it.
+    let mut batch = Batch::default();
 
     while let Some(item) = rx.recv().await {
         match item? {
@@ -140,22 +145,32 @@ pub async fn import(
                 }
             }
             Item::Commit(c) => {
-                out.uploaded += upload(remote, &std::mem::take(&mut pending)).await?;
-                pending_bytes = 0;
-                let id = import_commit(remote, &c, &blob_marks, &commit_marks, &mut out).await?;
-                if let Some(m) = c.mark {
-                    commit_marks.insert(m, id);
+                let marks = parent_marks(&c);
+                // Replacing the whole tree reads the first parent's: it must exist by then.
+                let replaces_all = c.ops.iter().any(|op| matches!(op, Op::DeleteAll));
+                if replaces_all && marks.first().is_some_and(|m| batch.queued.contains_key(m)) {
+                    batch.send(remote, &mut pending, &mut out, &mut commit_marks, &mut by_oid).await?;
+                    pending_bytes = 0;
                 }
-                if let Some(oid) = c.original_oid {
-                    by_oid.insert(oid, id);
-                }
-                out.commits += 1;
-                if out.commits % 1000 == 0 {
-                    eprintln!("  imported {} commits", out.commits);
+                let parents = marks
+                    .iter()
+                    .map(|m| match (commit_marks.get(m), batch.queued.get(m)) {
+                        (Some(id), _) => Ok(Parent::Id(*id)),
+                        (None, Some(i)) => Ok(Parent::Earlier(*i)),
+                        _ => Err(anyhow::anyhow!("unknown parent mark :{m}")),
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let first = marks.first().and_then(|m| commit_marks.get(m)).copied();
+                let cs = changeset_of(remote, &c, &blob_marks, first, &mut out).await?;
+                batch.push(parents, cs, c.mark, c.original_oid.clone());
+                if batch.items.len() >= COMMIT_BATCH {
+                    batch.send(remote, &mut pending, &mut out, &mut commit_marks, &mut by_oid).await?;
+                    pending_bytes = 0;
                 }
             }
         }
     }
+    batch.send(remote, &mut pending, &mut out, &mut commit_marks, &mut by_oid).await?;
     parser.join().map_err(|_| anyhow::anyhow!("fast-export parser panicked"))?;
     let status = child.wait()?;
     if !status.success() {
@@ -192,19 +207,24 @@ pub async fn import_commit(
     commits: &HashMap<u64, Id>,
     out: &mut ImportOutcome,
 ) -> Result<Id> {
-    let parent_of = |m: &u64| commits.get(m).copied().with_context(|| format!("unknown parent mark :{m}"));
-    let mut parents = Vec::new();
-    if let Some(f) = &c.from {
-        parents.push(parent_of(f)?);
-    }
-    for m in &c.merges {
-        // git accepts a parent listed twice (the Linux kernel has four such merges); the
-        // repeat adds no ancestry, so import it once.
-        let p = parent_of(m)?;
-        if !parents.contains(&p) {
-            parents.push(p);
-        }
-    }
+    let parents = parent_marks(c)
+        .iter()
+        .map(|m| commits.get(m).copied().with_context(|| format!("unknown parent mark :{m}")))
+        .collect::<Result<Vec<_>>>()?;
+    let mut cs = changeset_of(remote, c, blobs, parents.first().copied(), out).await?;
+    cs.parents = parents.iter().map(|p| p.0.to_vec()).collect();
+    Ok(remote.create_changeset(cs).await?.id)
+}
+
+/// The changeset for one fast-export commit, without its parents (the caller sets those).
+/// `first_parent` is read only when the commit replaces the whole tree.
+pub(crate) async fn changeset_of(
+    remote: &dyn Remote,
+    c: &GitCommit,
+    blobs: &HashMap<u64, Id>,
+    first_parent: Option<Id>,
+    out: &mut ImportOutcome,
+) -> Result<Changeset> {
     let mut files: BTreeMap<String, Option<(Mode, Id)>> = BTreeMap::new();
     let mut gitlinks = Vec::new();
     let mut delete_all = false;
@@ -236,7 +256,7 @@ pub async fn import_commit(
             }
         }
     }
-    if delete_all && let Some(p) = parents.first() {
+    if delete_all && let Some(p) = first_parent {
         let root = remote.changeset(&p.to_hex()).await?.root_tree;
         for (path, _) in list_files(remote.objects().as_ref(), root, &[]).await? {
             files.entry(path).or_insert(None);
@@ -246,8 +266,8 @@ pub async fn import_commit(
     let upserts: Vec<String> = files.iter().filter(|(_, v)| v.is_some()).map(|(k, _)| k.clone()).collect();
     files.retain(|p, v| v.is_some() || !upserts.iter().any(|u| paths_overlap(u, p)));
 
-    let cs = Changeset {
-        parents: parents.iter().map(|p| p.0.to_vec()).collect(),
+    Ok(Changeset {
+        parents: vec![],
         changes: files
             .into_iter()
             .map(|(p, v)| match v {
@@ -259,8 +279,64 @@ pub async fn import_commit(
         message: c.message.clone(),
         timestamp_ms: c.timestamp_s * 1000,
         git: git_origin(c, gitlinks),
-    };
-    Ok(remote.create_changeset(cs).await?.id)
+    })
+}
+
+/// A commit's parent marks, first parent first. git accepts a parent listed twice (the Linux
+/// kernel has four such merges); the repeat adds no ancestry, so it's kept once.
+pub(crate) fn parent_marks(c: &GitCommit) -> Vec<u64> {
+    let mut marks: Vec<u64> = c.from.iter().copied().collect();
+    for m in &c.merges {
+        if !marks.contains(m) {
+            marks.push(*m);
+        }
+    }
+    marks
+}
+
+/// Commits on their way to the server: sent together, after the objects they need.
+#[derive(Default)]
+struct Batch {
+    items: Vec<(Vec<Parent>, Changeset)>,
+    meta: Vec<(Option<u64>, Option<String>)>,
+    queued: HashMap<u64, usize>,
+}
+
+impl Batch {
+    fn push(&mut self, parents: Vec<Parent>, cs: Changeset, mark: Option<u64>, oid: Option<String>) {
+        if let Some(m) = mark {
+            self.queued.insert(m, self.items.len());
+        }
+        self.items.push((parents, cs));
+        self.meta.push((mark, oid));
+    }
+
+    async fn send(
+        &mut self,
+        remote: &dyn Remote,
+        pending: &mut Vec<(Id, Bytes)>,
+        out: &mut ImportOutcome,
+        commit_marks: &mut HashMap<u64, Id>,
+        by_oid: &mut HashMap<String, Id>,
+    ) -> Result<()> {
+        out.uploaded += upload(remote, &std::mem::take(pending)).await?;
+        if self.items.is_empty() {
+            return Ok(());
+        }
+        let ids = remote.create_changesets(std::mem::take(&mut self.items)).await?;
+        for (id, (mark, oid)) in ids.into_iter().zip(self.meta.drain(..)) {
+            if let Some(m) = mark {
+                commit_marks.insert(m, id);
+            }
+            if let Some(oid) = oid {
+                by_oid.insert(oid, id);
+            }
+            out.commits += 1;
+        }
+        self.queued.clear();
+        eprintln!("  imported {} commits", out.commits);
+        Ok(())
+    }
 }
 
 /// What git needs to make `c` again, when it came from git (it has an original id). A deleted

@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.0.2] - 2026-10-22
+
+### Changed
+- `gd import-git` streams commits to the server (protocol 1.1, `Changesets/CreateMany`) instead of one round trip each. git/git's 82,542 commits import locally in about 16 minutes with debug builds; over the internet the old path managed 5.5 commits a second.
+- Go, Python and TypeScript SDKs regenerated for protocol 1.1.
+
+## [4.0.1] - 2026-10-22
+
+### Fixed
+- `gd` and self-hosted runners connect to `https://` servers. Every client was built without TLS, so the CLI could reach `http://` servers only.
+- Behind a proxy, a burst of calls could make the server drop the shared connection (HTTP/2 "too many data frames"), failing every call on it. The server now uses fixed, generous flow-control windows.
+- Caddy no longer grows to hundreds of megabytes under load: the web app ships precompressed (`.br`, `.gz`) and Caddy's memory is capped.
+- Checkboxes and radio buttons read correctly in the light theme on a dark system.
+
+### Changed
+- Sign in with Google reaches an account made with email links when Google runs that mailbox (Gmail, or a Workspace domain); otherwise the refusal explains how to connect it.
+- Emails rebuilt to render the same in every mail client, light and dark, with the Grovedock mark.
+- Empty pages show where the first thing will land and what to do next; the sidebar offers *New repository* and *Bring a repository*.
+- The Grovedock mark in every browser tab, including sign-in pages, Safari and home screens.
+- The website and docs are served from Grovedock's own server.
+
 ## [4.0.0] - 2026-10-22
 
 Grovedock for teams where people and AI agents ship together.

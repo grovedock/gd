@@ -47,32 +47,74 @@ class FileChange(_message.Message):
     def __init__(self, path: _Optional[str] = ..., blob: _Optional[bytes] = ..., mode: _Optional[int] = ...) -> None: ...
 
 class ChangesetInfo(_message.Message):
-    __slots__ = ("id", "root_tree", "generation", "encoded", "redacted")
+    __slots__ = ("id", "root_tree", "generation", "encoded", "redacted", "provenance")
     ID_FIELD_NUMBER: _ClassVar[int]
     ROOT_TREE_FIELD_NUMBER: _ClassVar[int]
     GENERATION_FIELD_NUMBER: _ClassVar[int]
     ENCODED_FIELD_NUMBER: _ClassVar[int]
     REDACTED_FIELD_NUMBER: _ClassVar[int]
+    PROVENANCE_FIELD_NUMBER: _ClassVar[int]
     id: bytes
     root_tree: bytes
     generation: int
     encoded: bytes
     redacted: bool
-    def __init__(self, id: _Optional[bytes] = ..., root_tree: _Optional[bytes] = ..., generation: _Optional[int] = ..., encoded: _Optional[bytes] = ..., redacted: _Optional[bool] = ...) -> None: ...
+    provenance: Provenance
+    def __init__(self, id: _Optional[bytes] = ..., root_tree: _Optional[bytes] = ..., generation: _Optional[int] = ..., encoded: _Optional[bytes] = ..., redacted: _Optional[bool] = ..., provenance: _Optional[_Union[Provenance, _Mapping]] = ...) -> None: ...
+
+class Provenance(_message.Message):
+    __slots__ = ("by", "agent", "model", "session", "task", "at_ms")
+    BY_FIELD_NUMBER: _ClassVar[int]
+    AGENT_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    SESSION_FIELD_NUMBER: _ClassVar[int]
+    TASK_FIELD_NUMBER: _ClassVar[int]
+    AT_MS_FIELD_NUMBER: _ClassVar[int]
+    by: str
+    agent: bool
+    model: str
+    session: str
+    task: int
+    at_ms: int
+    def __init__(self, by: _Optional[str] = ..., agent: _Optional[bool] = ..., model: _Optional[str] = ..., session: _Optional[str] = ..., task: _Optional[int] = ..., at_ms: _Optional[int] = ...) -> None: ...
 
 class CreateChangesetRequest(_message.Message):
-    __slots__ = ("parents", "changes", "author", "message", "timestamp_ms")
+    __slots__ = ("parents", "changes", "author", "message", "timestamp_ms", "git", "model", "session", "task", "parent_refs")
     PARENTS_FIELD_NUMBER: _ClassVar[int]
     CHANGES_FIELD_NUMBER: _ClassVar[int]
     AUTHOR_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
     TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    GIT_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    SESSION_FIELD_NUMBER: _ClassVar[int]
+    TASK_FIELD_NUMBER: _ClassVar[int]
+    PARENT_REFS_FIELD_NUMBER: _ClassVar[int]
     parents: _containers.RepeatedScalarFieldContainer[bytes]
     changes: _containers.RepeatedCompositeFieldContainer[FileChange]
     author: str
     message: str
     timestamp_ms: int
-    def __init__(self, parents: _Optional[_Iterable[bytes]] = ..., changes: _Optional[_Iterable[_Union[FileChange, _Mapping]]] = ..., author: _Optional[str] = ..., message: _Optional[str] = ..., timestamp_ms: _Optional[int] = ...) -> None: ...
+    git: bytes
+    model: str
+    session: str
+    task: int
+    parent_refs: _containers.RepeatedCompositeFieldContainer[ParentRef]
+    def __init__(self, parents: _Optional[_Iterable[bytes]] = ..., changes: _Optional[_Iterable[_Union[FileChange, _Mapping]]] = ..., author: _Optional[str] = ..., message: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., git: _Optional[bytes] = ..., model: _Optional[str] = ..., session: _Optional[str] = ..., task: _Optional[int] = ..., parent_refs: _Optional[_Iterable[_Union[ParentRef, _Mapping]]] = ...) -> None: ...
+
+class ParentRef(_message.Message):
+    __slots__ = ("id", "earlier")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    EARLIER_FIELD_NUMBER: _ClassVar[int]
+    id: bytes
+    earlier: int
+    def __init__(self, id: _Optional[bytes] = ..., earlier: _Optional[int] = ...) -> None: ...
+
+class CreatedChangeset(_message.Message):
+    __slots__ = ("id",)
+    ID_FIELD_NUMBER: _ClassVar[int]
+    id: bytes
+    def __init__(self, id: _Optional[bytes] = ...) -> None: ...
 
 class ResolveRequest(_message.Message):
     __slots__ = ("rev",)
@@ -127,12 +169,14 @@ class RefList(_message.Message):
     def __init__(self, refs: _Optional[_Iterable[_Union[RefEntry, _Mapping]]] = ...) -> None: ...
 
 class LandRequest(_message.Message):
-    __slots__ = ("ref", "changeset")
+    __slots__ = ("ref", "changeset", "fast_forward")
     REF_FIELD_NUMBER: _ClassVar[int]
     CHANGESET_FIELD_NUMBER: _ClassVar[int]
+    FAST_FORWARD_FIELD_NUMBER: _ClassVar[int]
     ref: str
     changeset: bytes
-    def __init__(self, ref: _Optional[str] = ..., changeset: _Optional[bytes] = ...) -> None: ...
+    fast_forward: bool
+    def __init__(self, ref: _Optional[str] = ..., changeset: _Optional[bytes] = ..., fast_forward: _Optional[bool] = ...) -> None: ...
 
 class LandResponse(_message.Message):
     __slots__ = ("landed", "rebased", "attempts")
@@ -163,18 +207,59 @@ class BlameRequest(_message.Message):
     def __init__(self, rev: _Optional[str] = ..., path: _Optional[str] = ...) -> None: ...
 
 class BlameLine(_message.Message):
-    __slots__ = ("changeset", "text")
+    __slots__ = ("changeset", "text", "origin_line", "by")
     CHANGESET_FIELD_NUMBER: _ClassVar[int]
     TEXT_FIELD_NUMBER: _ClassVar[int]
+    ORIGIN_LINE_FIELD_NUMBER: _ClassVar[int]
+    BY_FIELD_NUMBER: _ClassVar[int]
     changeset: bytes
     text: str
-    def __init__(self, changeset: _Optional[bytes] = ..., text: _Optional[str] = ...) -> None: ...
+    origin_line: int
+    by: str
+    def __init__(self, changeset: _Optional[bytes] = ..., text: _Optional[str] = ..., origin_line: _Optional[int] = ..., by: _Optional[str] = ...) -> None: ...
+
+class LineAuthor(_message.Message):
+    __slots__ = ("agent", "name", "model", "person", "source")
+    AGENT_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    MODEL_FIELD_NUMBER: _ClassVar[int]
+    PERSON_FIELD_NUMBER: _ClassVar[int]
+    SOURCE_FIELD_NUMBER: _ClassVar[int]
+    agent: bool
+    name: str
+    model: str
+    person: str
+    source: str
+    def __init__(self, agent: _Optional[bool] = ..., name: _Optional[str] = ..., model: _Optional[str] = ..., person: _Optional[str] = ..., source: _Optional[str] = ...) -> None: ...
 
 class BlameResponse(_message.Message):
-    __slots__ = ("lines",)
+    __slots__ = ("lines", "authors")
+    class AuthorsEntry(_message.Message):
+        __slots__ = ("key", "value")
+        KEY_FIELD_NUMBER: _ClassVar[int]
+        VALUE_FIELD_NUMBER: _ClassVar[int]
+        key: str
+        value: LineAuthor
+        def __init__(self, key: _Optional[str] = ..., value: _Optional[_Union[LineAuthor, _Mapping]] = ...) -> None: ...
     LINES_FIELD_NUMBER: _ClassVar[int]
+    AUTHORS_FIELD_NUMBER: _ClassVar[int]
     lines: _containers.RepeatedCompositeFieldContainer[BlameLine]
-    def __init__(self, lines: _Optional[_Iterable[_Union[BlameLine, _Mapping]]] = ...) -> None: ...
+    authors: _containers.MessageMap[str, LineAuthor]
+    def __init__(self, lines: _Optional[_Iterable[_Union[BlameLine, _Mapping]]] = ..., authors: _Optional[_Mapping[str, LineAuthor]] = ...) -> None: ...
+
+class AttachGitAiNoteRequest(_message.Message):
+    __slots__ = ("changeset", "note")
+    CHANGESET_FIELD_NUMBER: _ClassVar[int]
+    NOTE_FIELD_NUMBER: _ClassVar[int]
+    changeset: bytes
+    note: str
+    def __init__(self, changeset: _Optional[bytes] = ..., note: _Optional[str] = ...) -> None: ...
+
+class GitAiNoteResponse(_message.Message):
+    __slots__ = ("note",)
+    NOTE_FIELD_NUMBER: _ClassVar[int]
+    note: str
+    def __init__(self, note: _Optional[str] = ...) -> None: ...
 
 class DiffRequest(_message.Message):
     __slots__ = ("to",)
@@ -278,6 +363,86 @@ class CheckoutPiece(_message.Message):
     data: bytes
     last: bool
     def __init__(self, path: _Optional[str] = ..., mode: _Optional[int] = ..., id: _Optional[bytes] = ..., data: _Optional[bytes] = ..., last: _Optional[bool] = ...) -> None: ...
+
+class SearchCodeRequest(_message.Message):
+    __slots__ = ("query", "ref", "limit", "page_token")
+    QUERY_FIELD_NUMBER: _ClassVar[int]
+    REF_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    PAGE_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    query: str
+    ref: str
+    limit: int
+    page_token: str
+    def __init__(self, query: _Optional[str] = ..., ref: _Optional[str] = ..., limit: _Optional[int] = ..., page_token: _Optional[str] = ...) -> None: ...
+
+class CodeLine(_message.Message):
+    __slots__ = ("line", "text", "ranges")
+    LINE_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    RANGES_FIELD_NUMBER: _ClassVar[int]
+    line: int
+    text: str
+    ranges: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, line: _Optional[int] = ..., text: _Optional[str] = ..., ranges: _Optional[_Iterable[int]] = ...) -> None: ...
+
+class CodeHit(_message.Message):
+    __slots__ = ("path", "lines", "more")
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    LINES_FIELD_NUMBER: _ClassVar[int]
+    MORE_FIELD_NUMBER: _ClassVar[int]
+    path: str
+    lines: _containers.RepeatedCompositeFieldContainer[CodeLine]
+    more: int
+    def __init__(self, path: _Optional[str] = ..., lines: _Optional[_Iterable[_Union[CodeLine, _Mapping]]] = ..., more: _Optional[int] = ...) -> None: ...
+
+class SearchCodeResponse(_message.Message):
+    __slots__ = ("hits", "files", "next_page_token", "indexed_at", "catching_up")
+    HITS_FIELD_NUMBER: _ClassVar[int]
+    FILES_FIELD_NUMBER: _ClassVar[int]
+    NEXT_PAGE_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    INDEXED_AT_FIELD_NUMBER: _ClassVar[int]
+    CATCHING_UP_FIELD_NUMBER: _ClassVar[int]
+    hits: _containers.RepeatedCompositeFieldContainer[CodeHit]
+    files: int
+    next_page_token: str
+    indexed_at: bytes
+    catching_up: bool
+    def __init__(self, hits: _Optional[_Iterable[_Union[CodeHit, _Mapping]]] = ..., files: _Optional[int] = ..., next_page_token: _Optional[str] = ..., indexed_at: _Optional[bytes] = ..., catching_up: _Optional[bool] = ...) -> None: ...
+
+class FindSymbolRequest(_message.Message):
+    __slots__ = ("name", "ref", "limit")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    REF_FIELD_NUMBER: _ClassVar[int]
+    LIMIT_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    ref: str
+    limit: int
+    def __init__(self, name: _Optional[str] = ..., ref: _Optional[str] = ..., limit: _Optional[int] = ...) -> None: ...
+
+class SymbolHit(_message.Message):
+    __slots__ = ("name", "kind", "path", "line", "text")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    PATH_FIELD_NUMBER: _ClassVar[int]
+    LINE_FIELD_NUMBER: _ClassVar[int]
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    kind: str
+    path: str
+    line: int
+    text: str
+    def __init__(self, name: _Optional[str] = ..., kind: _Optional[str] = ..., path: _Optional[str] = ..., line: _Optional[int] = ..., text: _Optional[str] = ...) -> None: ...
+
+class FindSymbolResponse(_message.Message):
+    __slots__ = ("symbols", "indexed_at", "catching_up")
+    SYMBOLS_FIELD_NUMBER: _ClassVar[int]
+    INDEXED_AT_FIELD_NUMBER: _ClassVar[int]
+    CATCHING_UP_FIELD_NUMBER: _ClassVar[int]
+    symbols: _containers.RepeatedCompositeFieldContainer[SymbolHit]
+    indexed_at: bytes
+    catching_up: bool
+    def __init__(self, symbols: _Optional[_Iterable[_Union[SymbolHit, _Mapping]]] = ..., indexed_at: _Optional[bytes] = ..., catching_up: _Optional[bool] = ...) -> None: ...
 
 class WhoAmIResponse(_message.Message):
     __slots__ = ("principal", "full_read", "read_prefixes")

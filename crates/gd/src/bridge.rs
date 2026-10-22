@@ -20,15 +20,16 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+use bytes::Bytes;
 use grovedock_core::Id;
 use grovedock_core::chunked::read_content;
 use grovedock_core::flags::{FeatureFlags, Flag, require};
-use grovedock_core::object::{FileChange, Mode};
+use grovedock_core::object::{Changeset, FileChange, Mode};
 
 use crate::features::commit::upload;
-use crate::features::git::{ImportOutcome, encode_blob, import_commit};
-use crate::gitfe::{Event, InlineOp, Parser, Writer};
-use crate::remote::Remote;
+use crate::features::git::{COMMIT_BATCH, ImportOutcome, changeset_of, encode_blob, parent_marks};
+use crate::gitfe::{Event, InlineOp, Op, Parser, Writer};
+use crate::remote::{Parent, Remote};
 use crate::workspace::list_files;
 
 /// Where tags live among a repository's refs: `tags/v1.2.0`.
@@ -309,6 +310,8 @@ impl<'a> Bridge<'a> {
         let mut pending = Vec::new();
         let mut pushed = Pushed::default();
         let mut stats = ImportOutcome::default();
+        // Commits go to the server together, one stream per batch, not a round trip each.
+        let mut queue = Queue::default();
         let mut parser = Parser::new(&mut *input);
         while let Some(event) = parser.next_event()? {
             match event {
@@ -319,16 +322,34 @@ impl<'a> Bridge<'a> {
                     pending.extend(objects);
                 }
                 Event::Commit(c) => {
-                    upload(self.remote, &std::mem::take(&mut pending)).await?;
-                    let id = import_commit(self.remote, &c, &blobs, &commits, &mut stats).await?;
-                    if let Some(m) = c.mark {
-                        commits.insert(m, id);
-                        marks.entries.insert(m, ('c', id));
+                    let pm = parent_marks(&c);
+                    let replaces_all = c.ops.iter().any(|op| matches!(op, Op::DeleteAll));
+                    if replaces_all && pm.first().is_some_and(|m| queue.at.contains_key(m)) {
+                        queue.send(self.remote, &mut pending, &mut commits, marks, &mut pushed).await?;
                     }
-                    pushed.order.push((c.refname.clone(), id));
-                    pushed.tips.insert(c.refname.clone(), id);
+                    let parents = pm
+                        .iter()
+                        .map(|m| match (commits.get(m), queue.at.get(m)) {
+                            (Some(id), _) => Ok(Parent::Id(*id)),
+                            (None, Some(i)) => Ok(Parent::Earlier(*i)),
+                            _ => Err(anyhow::anyhow!("unknown parent mark :{m}")),
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    let first = pm.first().and_then(|m| commits.get(m)).copied();
+                    let cs = changeset_of(self.remote, &c, &blobs, first, &mut stats).await?;
+                    if let Some(m) = c.mark {
+                        queue.at.insert(m, queue.items.len());
+                    }
+                    queue.items.push((parents, cs));
+                    queue.meta.push((c.mark, c.refname.clone()));
+                    if queue.items.len() >= COMMIT_BATCH {
+                        queue.send(self.remote, &mut pending, &mut commits, marks, &mut pushed).await?;
+                    }
                 }
                 Event::Reset { refname, from: Some(m) } => {
+                    if queue.at.contains_key(&m) {
+                        queue.send(self.remote, &mut pending, &mut commits, marks, &mut pushed).await?;
+                    }
                     let id = *commits.get(&m).with_context(|| format!("unknown mark :{m} for {refname}"))?;
                     pushed.tips.insert(refname, id);
                 }
@@ -336,7 +357,7 @@ impl<'a> Bridge<'a> {
             }
         }
         drop(parser);
-        upload(self.remote, &pending).await?;
+        queue.send(self.remote, &mut pending, &mut commits, marks, &mut pushed).await?;
         Ok(pushed)
     }
 
@@ -469,6 +490,42 @@ impl<'a> Bridge<'a> {
                 l.short()
             );
         }
+        Ok(())
+    }
+}
+
+/// Pushed commits waiting to be created, in stream order; `at` maps a mark to its position.
+#[derive(Default)]
+struct Queue {
+    items: Vec<(Vec<Parent>, Changeset)>,
+    meta: Vec<(Option<u64>, String)>,
+    at: HashMap<u64, usize>,
+}
+
+impl Queue {
+    /// Uploads the objects they need, then creates them in one call.
+    async fn send(
+        &mut self,
+        remote: &dyn Remote,
+        pending: &mut Vec<(Id, Bytes)>,
+        commits: &mut HashMap<u64, Id>,
+        marks: &mut Marks,
+        pushed: &mut Pushed,
+    ) -> Result<()> {
+        upload(remote, &std::mem::take(pending)).await?;
+        if self.items.is_empty() {
+            return Ok(());
+        }
+        let ids = remote.create_changesets(std::mem::take(&mut self.items)).await?;
+        for (id, (mark, refname)) in ids.into_iter().zip(self.meta.drain(..)) {
+            if let Some(m) = mark {
+                commits.insert(m, id);
+                marks.entries.insert(m, ('c', id));
+            }
+            pushed.order.push((refname.clone(), id));
+            pushed.tips.insert(refname, id);
+        }
+        self.at.clear();
         Ok(())
     }
 }

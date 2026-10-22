@@ -315,7 +315,9 @@ type ChangesetInfo struct {
 	Encoded []byte `protobuf:"bytes,4,opt,name=encoded,proto3" json:"encoded,omitempty"`
 	// Changes outside the caller's read scope were removed, so `encoded` no longer hashes
 	// to `id` and cannot be verified by the client.
-	Redacted      bool `protobuf:"varint,5,opt,name=redacted,proto3" json:"redacted,omitempty"`
+	Redacted bool `protobuf:"varint,5,opt,name=redacted,proto3" json:"redacted,omitempty"`
+	// Who uploaded it, as this server recorded it; absent for changes from before this was kept.
+	Provenance    *Provenance `protobuf:"bytes,6,opt,name=provenance,proto3" json:"provenance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -385,20 +387,124 @@ func (x *ChangesetInfo) GetRedacted() bool {
 	return false
 }
 
+func (x *ChangesetInfo) GetProvenance() *Provenance {
+	if x != nil {
+		return x.Provenance
+	}
+	return nil
+}
+
+// Who made a change: the signed-in account that uploaded it (not what the change says about
+// itself), and what an agent declared when it did. Kept beside the change, not in its message.
+type Provenance struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	By      string                 `protobuf:"bytes,1,opt,name=by,proto3" json:"by,omitempty"`
+	Agent   bool                   `protobuf:"varint,2,opt,name=agent,proto3" json:"agent,omitempty"`
+	Model   string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	Session string                 `protobuf:"bytes,4,opt,name=session,proto3" json:"session,omitempty"`
+	// The issue it's for, 0 if none.
+	Task          uint64 `protobuf:"varint,5,opt,name=task,proto3" json:"task,omitempty"`
+	AtMs          int64  `protobuf:"varint,6,opt,name=at_ms,json=atMs,proto3" json:"at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Provenance) Reset() {
+	*x = Provenance{}
+	mi := &file_gd_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Provenance) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Provenance) ProtoMessage() {}
+
+func (x *Provenance) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Provenance.ProtoReflect.Descriptor instead.
+func (*Provenance) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *Provenance) GetBy() string {
+	if x != nil {
+		return x.By
+	}
+	return ""
+}
+
+func (x *Provenance) GetAgent() bool {
+	if x != nil {
+		return x.Agent
+	}
+	return false
+}
+
+func (x *Provenance) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *Provenance) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+func (x *Provenance) GetTask() uint64 {
+	if x != nil {
+		return x.Task
+	}
+	return 0
+}
+
+func (x *Provenance) GetAtMs() int64 {
+	if x != nil {
+		return x.AtMs
+	}
+	return 0
+}
+
 type CreateChangesetRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Parents       [][]byte               `protobuf:"bytes,1,rep,name=parents,proto3" json:"parents,omitempty"`
-	Changes       []*FileChange          `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
-	Author        string                 `protobuf:"bytes,3,opt,name=author,proto3" json:"author,omitempty"`
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	TimestampMs   int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Parents     [][]byte               `protobuf:"bytes,1,rep,name=parents,proto3" json:"parents,omitempty"`
+	Changes     []*FileChange          `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
+	Author      string                 `protobuf:"bytes,3,opt,name=author,proto3" json:"author,omitempty"`
+	Message     string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	TimestampMs int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	// An encoded gd.objects.v1.GitOrigin, for a change that came from git (imports, git pushes).
+	Git []byte `protobuf:"bytes,6,opt,name=git,proto3" json:"git,omitempty"`
+	// An agent's own account of itself, recorded in the change's provenance: the model, its
+	// session (conversation) id, and the issue it's working on.
+	Model   string `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
+	Session string `protobuf:"bytes,8,opt,name=session,proto3" json:"session,omitempty"`
+	Task    uint64 `protobuf:"varint,9,opt,name=task,proto3" json:"task,omitempty"`
+	// CreateMany only: the parents, in order, each an existing change or one made earlier on the
+	// same stream. When set, `parents` must be empty.
+	ParentRefs    []*ParentRef `protobuf:"bytes,10,rep,name=parent_refs,json=parentRefs,proto3" json:"parent_refs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateChangesetRequest) Reset() {
 	*x = CreateChangesetRequest{}
-	mi := &file_gd_proto_msgTypes[7]
+	mi := &file_gd_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -410,7 +516,7 @@ func (x *CreateChangesetRequest) String() string {
 func (*CreateChangesetRequest) ProtoMessage() {}
 
 func (x *CreateChangesetRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[7]
+	mi := &file_gd_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -423,7 +529,7 @@ func (x *CreateChangesetRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateChangesetRequest.ProtoReflect.Descriptor instead.
 func (*CreateChangesetRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{7}
+	return file_gd_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CreateChangesetRequest) GetParents() [][]byte {
@@ -461,6 +567,169 @@ func (x *CreateChangesetRequest) GetTimestampMs() int64 {
 	return 0
 }
 
+func (x *CreateChangesetRequest) GetGit() []byte {
+	if x != nil {
+		return x.Git
+	}
+	return nil
+}
+
+func (x *CreateChangesetRequest) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *CreateChangesetRequest) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+func (x *CreateChangesetRequest) GetTask() uint64 {
+	if x != nil {
+		return x.Task
+	}
+	return 0
+}
+
+func (x *CreateChangesetRequest) GetParentRefs() []*ParentRef {
+	if x != nil {
+		return x.ParentRefs
+	}
+	return nil
+}
+
+// A parent of a change sent to CreateMany.
+type ParentRef struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Parent:
+	//
+	//	*ParentRef_Id
+	//	*ParentRef_Earlier
+	Parent        isParentRef_Parent `protobuf_oneof:"parent"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ParentRef) Reset() {
+	*x = ParentRef{}
+	mi := &file_gd_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ParentRef) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParentRef) ProtoMessage() {}
+
+func (x *ParentRef) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParentRef.ProtoReflect.Descriptor instead.
+func (*ParentRef) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ParentRef) GetParent() isParentRef_Parent {
+	if x != nil {
+		return x.Parent
+	}
+	return nil
+}
+
+func (x *ParentRef) GetId() []byte {
+	if x != nil {
+		if x, ok := x.Parent.(*ParentRef_Id); ok {
+			return x.Id
+		}
+	}
+	return nil
+}
+
+func (x *ParentRef) GetEarlier() uint32 {
+	if x != nil {
+		if x, ok := x.Parent.(*ParentRef_Earlier); ok {
+			return x.Earlier
+		}
+	}
+	return 0
+}
+
+type isParentRef_Parent interface {
+	isParentRef_Parent()
+}
+
+type ParentRef_Id struct {
+	Id []byte `protobuf:"bytes,1,opt,name=id,proto3,oneof"`
+}
+
+type ParentRef_Earlier struct {
+	// The change created at this position (from 0) earlier on the same stream.
+	Earlier uint32 `protobuf:"varint,2,opt,name=earlier,proto3,oneof"`
+}
+
+func (*ParentRef_Id) isParentRef_Parent() {}
+
+func (*ParentRef_Earlier) isParentRef_Parent() {}
+
+type CreatedChangeset struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreatedChangeset) Reset() {
+	*x = CreatedChangeset{}
+	mi := &file_gd_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreatedChangeset) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreatedChangeset) ProtoMessage() {}
+
+func (x *CreatedChangeset) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreatedChangeset.ProtoReflect.Descriptor instead.
+func (*CreatedChangeset) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CreatedChangeset) GetId() []byte {
+	if x != nil {
+		return x.Id
+	}
+	return nil
+}
+
 type ResolveRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Rev           string                 `protobuf:"bytes,1,opt,name=rev,proto3" json:"rev,omitempty"`
@@ -470,7 +739,7 @@ type ResolveRequest struct {
 
 func (x *ResolveRequest) Reset() {
 	*x = ResolveRequest{}
-	mi := &file_gd_proto_msgTypes[8]
+	mi := &file_gd_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -482,7 +751,7 @@ func (x *ResolveRequest) String() string {
 func (*ResolveRequest) ProtoMessage() {}
 
 func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[8]
+	mi := &file_gd_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -495,7 +764,7 @@ func (x *ResolveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveRequest.ProtoReflect.Descriptor instead.
 func (*ResolveRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{8}
+	return file_gd_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ResolveRequest) GetRev() string {
@@ -514,7 +783,7 @@ type RefName struct {
 
 func (x *RefName) Reset() {
 	*x = RefName{}
-	mi := &file_gd_proto_msgTypes[9]
+	mi := &file_gd_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +795,7 @@ func (x *RefName) String() string {
 func (*RefName) ProtoMessage() {}
 
 func (x *RefName) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[9]
+	mi := &file_gd_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +808,7 @@ func (x *RefName) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefName.ProtoReflect.Descriptor instead.
 func (*RefName) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{9}
+	return file_gd_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *RefName) GetName() string {
@@ -559,7 +828,7 @@ type RefValue struct {
 
 func (x *RefValue) Reset() {
 	*x = RefValue{}
-	mi := &file_gd_proto_msgTypes[10]
+	mi := &file_gd_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -571,7 +840,7 @@ func (x *RefValue) String() string {
 func (*RefValue) ProtoMessage() {}
 
 func (x *RefValue) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[10]
+	mi := &file_gd_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -584,7 +853,7 @@ func (x *RefValue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefValue.ProtoReflect.Descriptor instead.
 func (*RefValue) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{10}
+	return file_gd_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RefValue) GetExists() bool {
@@ -613,7 +882,7 @@ type CasRequest struct {
 
 func (x *CasRequest) Reset() {
 	*x = CasRequest{}
-	mi := &file_gd_proto_msgTypes[11]
+	mi := &file_gd_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -625,7 +894,7 @@ func (x *CasRequest) String() string {
 func (*CasRequest) ProtoMessage() {}
 
 func (x *CasRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[11]
+	mi := &file_gd_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -638,7 +907,7 @@ func (x *CasRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CasRequest.ProtoReflect.Descriptor instead.
 func (*CasRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{11}
+	return file_gd_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CasRequest) GetName() string {
@@ -678,7 +947,7 @@ type CasResponse struct {
 
 func (x *CasResponse) Reset() {
 	*x = CasResponse{}
-	mi := &file_gd_proto_msgTypes[12]
+	mi := &file_gd_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -690,7 +959,7 @@ func (x *CasResponse) String() string {
 func (*CasResponse) ProtoMessage() {}
 
 func (x *CasResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[12]
+	mi := &file_gd_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -703,7 +972,7 @@ func (x *CasResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CasResponse.ProtoReflect.Descriptor instead.
 func (*CasResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{12}
+	return file_gd_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CasResponse) GetSwapped() bool {
@@ -723,7 +992,7 @@ type RefEntry struct {
 
 func (x *RefEntry) Reset() {
 	*x = RefEntry{}
-	mi := &file_gd_proto_msgTypes[13]
+	mi := &file_gd_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -735,7 +1004,7 @@ func (x *RefEntry) String() string {
 func (*RefEntry) ProtoMessage() {}
 
 func (x *RefEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[13]
+	mi := &file_gd_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -748,7 +1017,7 @@ func (x *RefEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefEntry.ProtoReflect.Descriptor instead.
 func (*RefEntry) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{13}
+	return file_gd_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RefEntry) GetName() string {
@@ -774,7 +1043,7 @@ type RefList struct {
 
 func (x *RefList) Reset() {
 	*x = RefList{}
-	mi := &file_gd_proto_msgTypes[14]
+	mi := &file_gd_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -786,7 +1055,7 @@ func (x *RefList) String() string {
 func (*RefList) ProtoMessage() {}
 
 func (x *RefList) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[14]
+	mi := &file_gd_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -799,7 +1068,7 @@ func (x *RefList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefList.ProtoReflect.Descriptor instead.
 func (*RefList) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{14}
+	return file_gd_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RefList) GetRefs() []*RefEntry {
@@ -810,16 +1079,20 @@ func (x *RefList) GetRefs() []*RefEntry {
 }
 
 type LandRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ref           string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
-	Changeset     []byte                 `protobuf:"bytes,2,opt,name=changeset,proto3" json:"changeset,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Ref       string                 `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
+	Changeset []byte                 `protobuf:"bytes,2,opt,name=changeset,proto3" json:"changeset,omitempty"`
+	// As git pushes: the ref moves to the changeset as it is, only if the ref's head is one of
+	// its ancestors (or the ref doesn't exist); every changeset it brings is checked as a land
+	// would be. Nothing is rebased; otherwise refused ("fetch first").
+	FastForward   bool `protobuf:"varint,3,opt,name=fast_forward,json=fastForward,proto3" json:"fast_forward,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LandRequest) Reset() {
 	*x = LandRequest{}
-	mi := &file_gd_proto_msgTypes[15]
+	mi := &file_gd_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -831,7 +1104,7 @@ func (x *LandRequest) String() string {
 func (*LandRequest) ProtoMessage() {}
 
 func (x *LandRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[15]
+	mi := &file_gd_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -844,7 +1117,7 @@ func (x *LandRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LandRequest.ProtoReflect.Descriptor instead.
 func (*LandRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{15}
+	return file_gd_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *LandRequest) GetRef() string {
@@ -861,6 +1134,13 @@ func (x *LandRequest) GetChangeset() []byte {
 	return nil
 }
 
+func (x *LandRequest) GetFastForward() bool {
+	if x != nil {
+		return x.FastForward
+	}
+	return false
+}
+
 type LandResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Landed        []byte                 `protobuf:"bytes,1,opt,name=landed,proto3" json:"landed,omitempty"`
@@ -872,7 +1152,7 @@ type LandResponse struct {
 
 func (x *LandResponse) Reset() {
 	*x = LandResponse{}
-	mi := &file_gd_proto_msgTypes[16]
+	mi := &file_gd_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +1164,7 @@ func (x *LandResponse) String() string {
 func (*LandResponse) ProtoMessage() {}
 
 func (x *LandResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[16]
+	mi := &file_gd_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +1177,7 @@ func (x *LandResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LandResponse.ProtoReflect.Descriptor instead.
 func (*LandResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{16}
+	return file_gd_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *LandResponse) GetLanded() []byte {
@@ -932,7 +1212,7 @@ type LogRequest struct {
 
 func (x *LogRequest) Reset() {
 	*x = LogRequest{}
-	mi := &file_gd_proto_msgTypes[17]
+	mi := &file_gd_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -944,7 +1224,7 @@ func (x *LogRequest) String() string {
 func (*LogRequest) ProtoMessage() {}
 
 func (x *LogRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[17]
+	mi := &file_gd_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -957,7 +1237,7 @@ func (x *LogRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRequest.ProtoReflect.Descriptor instead.
 func (*LogRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{17}
+	return file_gd_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *LogRequest) GetRev() string {
@@ -991,7 +1271,7 @@ type BlameRequest struct {
 
 func (x *BlameRequest) Reset() {
 	*x = BlameRequest{}
-	mi := &file_gd_proto_msgTypes[18]
+	mi := &file_gd_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1003,7 +1283,7 @@ func (x *BlameRequest) String() string {
 func (*BlameRequest) ProtoMessage() {}
 
 func (x *BlameRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[18]
+	mi := &file_gd_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1016,7 +1296,7 @@ func (x *BlameRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlameRequest.ProtoReflect.Descriptor instead.
 func (*BlameRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{18}
+	return file_gd_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *BlameRequest) GetRev() string {
@@ -1036,15 +1316,20 @@ func (x *BlameRequest) GetPath() string {
 type BlameLine struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Changeset that last changed this line.
-	Changeset     []byte `protobuf:"bytes,1,opt,name=changeset,proto3" json:"changeset,omitempty"`
-	Text          string `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	Changeset []byte `protobuf:"bytes,1,opt,name=changeset,proto3" json:"changeset,omitempty"`
+	Text      string `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	// The line's number (1-based) in that changeset's version of the file.
+	OriginLine uint32 `protobuf:"varint,3,opt,name=origin_line,json=originLine,proto3" json:"origin_line,omitempty"`
+	// Who wrote it: a key into BlameResponse.authors. Empty when nothing is known beyond the
+	// changeset's author, which is not a claim that a person wrote it.
+	By            string `protobuf:"bytes,4,opt,name=by,proto3" json:"by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BlameLine) Reset() {
 	*x = BlameLine{}
-	mi := &file_gd_proto_msgTypes[19]
+	mi := &file_gd_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1056,7 +1341,7 @@ func (x *BlameLine) String() string {
 func (*BlameLine) ProtoMessage() {}
 
 func (x *BlameLine) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[19]
+	mi := &file_gd_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1069,7 +1354,7 @@ func (x *BlameLine) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlameLine.ProtoReflect.Descriptor instead.
 func (*BlameLine) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{19}
+	return file_gd_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *BlameLine) GetChangeset() []byte {
@@ -1086,16 +1371,111 @@ func (x *BlameLine) GetText() string {
 	return ""
 }
 
+func (x *BlameLine) GetOriginLine() uint32 {
+	if x != nil {
+		return x.OriginLine
+	}
+	return 0
+}
+
+func (x *BlameLine) GetBy() string {
+	if x != nil {
+		return x.By
+	}
+	return ""
+}
+
+type LineAuthor struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Agent bool                   `protobuf:"varint,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	// An account (asha, agent/acme-bot), or for git-ai notes the tool (claude_code, cursor) or the
+	// person ("Asha Rao <asha@acme.test>").
+	Name  string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Model string `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	// For an agent: the person it worked for, when known.
+	Person string `protobuf:"bytes,4,opt,name=person,proto3" json:"person,omitempty"`
+	// "grovedock" (recorded by this server) or "git-ai" (from the source repository's notes).
+	Source        string `protobuf:"bytes,5,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LineAuthor) Reset() {
+	*x = LineAuthor{}
+	mi := &file_gd_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LineAuthor) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LineAuthor) ProtoMessage() {}
+
+func (x *LineAuthor) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LineAuthor.ProtoReflect.Descriptor instead.
+func (*LineAuthor) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *LineAuthor) GetAgent() bool {
+	if x != nil {
+		return x.Agent
+	}
+	return false
+}
+
+func (x *LineAuthor) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *LineAuthor) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *LineAuthor) GetPerson() string {
+	if x != nil {
+		return x.Person
+	}
+	return ""
+}
+
+func (x *LineAuthor) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
 type BlameResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Lines         []*BlameLine           `protobuf:"bytes,1,rep,name=lines,proto3" json:"lines,omitempty"`
+	Authors       map[string]*LineAuthor `protobuf:"bytes,2,rep,name=authors,proto3" json:"authors,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BlameResponse) Reset() {
 	*x = BlameResponse{}
-	mi := &file_gd_proto_msgTypes[20]
+	mi := &file_gd_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1107,7 +1487,7 @@ func (x *BlameResponse) String() string {
 func (*BlameResponse) ProtoMessage() {}
 
 func (x *BlameResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[20]
+	mi := &file_gd_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1120,7 +1500,7 @@ func (x *BlameResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlameResponse.ProtoReflect.Descriptor instead.
 func (*BlameResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{20}
+	return file_gd_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *BlameResponse) GetLines() []*BlameLine {
@@ -1128,6 +1508,110 @@ func (x *BlameResponse) GetLines() []*BlameLine {
 		return x.Lines
 	}
 	return nil
+}
+
+func (x *BlameResponse) GetAuthors() map[string]*LineAuthor {
+	if x != nil {
+		return x.Authors
+	}
+	return nil
+}
+
+// A git-ai authorship note (refs/notes/ai, authorship/3.x) for a change that came from git.
+type AttachGitAiNoteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Changeset     []byte                 `protobuf:"bytes,1,opt,name=changeset,proto3" json:"changeset,omitempty"`
+	Note          string                 `protobuf:"bytes,2,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttachGitAiNoteRequest) Reset() {
+	*x = AttachGitAiNoteRequest{}
+	mi := &file_gd_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachGitAiNoteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachGitAiNoteRequest) ProtoMessage() {}
+
+func (x *AttachGitAiNoteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachGitAiNoteRequest.ProtoReflect.Descriptor instead.
+func (*AttachGitAiNoteRequest) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *AttachGitAiNoteRequest) GetChangeset() []byte {
+	if x != nil {
+		return x.Changeset
+	}
+	return nil
+}
+
+func (x *AttachGitAiNoteRequest) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+type GitAiNoteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Note          string                 `protobuf:"bytes,1,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitAiNoteResponse) Reset() {
+	*x = GitAiNoteResponse{}
+	mi := &file_gd_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitAiNoteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitAiNoteResponse) ProtoMessage() {}
+
+func (x *GitAiNoteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitAiNoteResponse.ProtoReflect.Descriptor instead.
+func (*GitAiNoteResponse) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *GitAiNoteResponse) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
 }
 
 type DiffRequest struct {
@@ -1140,7 +1624,7 @@ type DiffRequest struct {
 
 func (x *DiffRequest) Reset() {
 	*x = DiffRequest{}
-	mi := &file_gd_proto_msgTypes[21]
+	mi := &file_gd_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1152,7 +1636,7 @@ func (x *DiffRequest) String() string {
 func (*DiffRequest) ProtoMessage() {}
 
 func (x *DiffRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[21]
+	mi := &file_gd_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1165,7 +1649,7 @@ func (x *DiffRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiffRequest.ProtoReflect.Descriptor instead.
 func (*DiffRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{21}
+	return file_gd_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DiffRequest) GetFrom() string {
@@ -1191,7 +1675,7 @@ type DiffResponse struct {
 
 func (x *DiffResponse) Reset() {
 	*x = DiffResponse{}
-	mi := &file_gd_proto_msgTypes[22]
+	mi := &file_gd_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1203,7 +1687,7 @@ func (x *DiffResponse) String() string {
 func (*DiffResponse) ProtoMessage() {}
 
 func (x *DiffResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[22]
+	mi := &file_gd_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1216,7 +1700,7 @@ func (x *DiffResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiffResponse.ProtoReflect.Descriptor instead.
 func (*DiffResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{22}
+	return file_gd_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DiffResponse) GetChanges() []*FileChange {
@@ -1236,7 +1720,7 @@ type MergeBaseRequest struct {
 
 func (x *MergeBaseRequest) Reset() {
 	*x = MergeBaseRequest{}
-	mi := &file_gd_proto_msgTypes[23]
+	mi := &file_gd_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1248,7 +1732,7 @@ func (x *MergeBaseRequest) String() string {
 func (*MergeBaseRequest) ProtoMessage() {}
 
 func (x *MergeBaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[23]
+	mi := &file_gd_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1261,7 +1745,7 @@ func (x *MergeBaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeBaseRequest.ProtoReflect.Descriptor instead.
 func (*MergeBaseRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{23}
+	return file_gd_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *MergeBaseRequest) GetA() string {
@@ -1288,7 +1772,7 @@ type MergeBaseResponse struct {
 
 func (x *MergeBaseResponse) Reset() {
 	*x = MergeBaseResponse{}
-	mi := &file_gd_proto_msgTypes[24]
+	mi := &file_gd_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1300,7 +1784,7 @@ func (x *MergeBaseResponse) String() string {
 func (*MergeBaseResponse) ProtoMessage() {}
 
 func (x *MergeBaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[24]
+	mi := &file_gd_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1313,7 +1797,7 @@ func (x *MergeBaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeBaseResponse.ProtoReflect.Descriptor instead.
 func (*MergeBaseResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{24}
+	return file_gd_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *MergeBaseResponse) GetFound() bool {
@@ -1340,7 +1824,7 @@ type BrowseRequest struct {
 
 func (x *BrowseRequest) Reset() {
 	*x = BrowseRequest{}
-	mi := &file_gd_proto_msgTypes[25]
+	mi := &file_gd_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1352,7 +1836,7 @@ func (x *BrowseRequest) String() string {
 func (*BrowseRequest) ProtoMessage() {}
 
 func (x *BrowseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[25]
+	mi := &file_gd_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1365,7 +1849,7 @@ func (x *BrowseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BrowseRequest.ProtoReflect.Descriptor instead.
 func (*BrowseRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{25}
+	return file_gd_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *BrowseRequest) GetRev() string {
@@ -1393,7 +1877,7 @@ type DirEntry struct {
 
 func (x *DirEntry) Reset() {
 	*x = DirEntry{}
-	mi := &file_gd_proto_msgTypes[26]
+	mi := &file_gd_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1405,7 +1889,7 @@ func (x *DirEntry) String() string {
 func (*DirEntry) ProtoMessage() {}
 
 func (x *DirEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[26]
+	mi := &file_gd_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1418,7 +1902,7 @@ func (x *DirEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DirEntry.ProtoReflect.Descriptor instead.
 func (*DirEntry) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{26}
+	return file_gd_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DirEntry) GetName() string {
@@ -1451,7 +1935,7 @@ type ListDirResponse struct {
 
 func (x *ListDirResponse) Reset() {
 	*x = ListDirResponse{}
-	mi := &file_gd_proto_msgTypes[27]
+	mi := &file_gd_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1463,7 +1947,7 @@ func (x *ListDirResponse) String() string {
 func (*ListDirResponse) ProtoMessage() {}
 
 func (x *ListDirResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[27]
+	mi := &file_gd_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1476,7 +1960,7 @@ func (x *ListDirResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDirResponse.ProtoReflect.Descriptor instead.
 func (*ListDirResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{27}
+	return file_gd_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *ListDirResponse) GetEntries() []*DirEntry {
@@ -1497,7 +1981,7 @@ type ReadFileResponse struct {
 
 func (x *ReadFileResponse) Reset() {
 	*x = ReadFileResponse{}
-	mi := &file_gd_proto_msgTypes[28]
+	mi := &file_gd_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1509,7 +1993,7 @@ func (x *ReadFileResponse) String() string {
 func (*ReadFileResponse) ProtoMessage() {}
 
 func (x *ReadFileResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[28]
+	mi := &file_gd_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1522,7 +2006,7 @@ func (x *ReadFileResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadFileResponse.ProtoReflect.Descriptor instead.
 func (*ReadFileResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{28}
+	return file_gd_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *ReadFileResponse) GetContent() []byte {
@@ -1558,7 +2042,7 @@ type FindRequest struct {
 
 func (x *FindRequest) Reset() {
 	*x = FindRequest{}
-	mi := &file_gd_proto_msgTypes[29]
+	mi := &file_gd_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1570,7 +2054,7 @@ func (x *FindRequest) String() string {
 func (*FindRequest) ProtoMessage() {}
 
 func (x *FindRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[29]
+	mi := &file_gd_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1583,7 +2067,7 @@ func (x *FindRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindRequest.ProtoReflect.Descriptor instead.
 func (*FindRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{29}
+	return file_gd_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *FindRequest) GetRev() string {
@@ -1617,7 +2101,7 @@ type FindResponse struct {
 
 func (x *FindResponse) Reset() {
 	*x = FindResponse{}
-	mi := &file_gd_proto_msgTypes[30]
+	mi := &file_gd_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1629,7 +2113,7 @@ func (x *FindResponse) String() string {
 func (*FindResponse) ProtoMessage() {}
 
 func (x *FindResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[30]
+	mi := &file_gd_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1642,7 +2126,7 @@ func (x *FindResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FindResponse.ProtoReflect.Descriptor instead.
 func (*FindResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{30}
+	return file_gd_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *FindResponse) GetPaths() []string {
@@ -1670,7 +2154,7 @@ type CheckoutRequest struct {
 
 func (x *CheckoutRequest) Reset() {
 	*x = CheckoutRequest{}
-	mi := &file_gd_proto_msgTypes[31]
+	mi := &file_gd_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1682,7 +2166,7 @@ func (x *CheckoutRequest) String() string {
 func (*CheckoutRequest) ProtoMessage() {}
 
 func (x *CheckoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[31]
+	mi := &file_gd_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1695,7 +2179,7 @@ func (x *CheckoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckoutRequest.ProtoReflect.Descriptor instead.
 func (*CheckoutRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{31}
+	return file_gd_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *CheckoutRequest) GetRev() string {
@@ -1727,7 +2211,7 @@ type CheckoutPiece struct {
 
 func (x *CheckoutPiece) Reset() {
 	*x = CheckoutPiece{}
-	mi := &file_gd_proto_msgTypes[32]
+	mi := &file_gd_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1739,7 +2223,7 @@ func (x *CheckoutPiece) String() string {
 func (*CheckoutPiece) ProtoMessage() {}
 
 func (x *CheckoutPiece) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[32]
+	mi := &file_gd_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1752,7 +2236,7 @@ func (x *CheckoutPiece) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckoutPiece.ProtoReflect.Descriptor instead.
 func (*CheckoutPiece) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{32}
+	return file_gd_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *CheckoutPiece) GetPath() string {
@@ -1790,6 +2274,482 @@ func (x *CheckoutPiece) GetLast() bool {
 	return false
 }
 
+// API-first file access: CI and tools read source without any checkout.
+// Code search over a branch: text (every term, 3 characters or more, case-insensitive) and
+// symbol definitions. Servers index a branch the first time it's searched and keep the index
+// up to date as it moves; results only include files the caller may read.
+type SearchCodeRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Words or "quoted phrases", all of which a file must contain, plus `path:dir/` and
+	// `-path:dir/` to narrow by path and `lang:rs` by language.
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	// The branch; empty: main.
+	Ref string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	// Files per page (default 20, at most 100).
+	Limit         uint32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	PageToken     string `protobuf:"bytes,4,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchCodeRequest) Reset() {
+	*x = SearchCodeRequest{}
+	mi := &file_gd_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchCodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchCodeRequest) ProtoMessage() {}
+
+func (x *SearchCodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchCodeRequest.ProtoReflect.Descriptor instead.
+func (*SearchCodeRequest) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SearchCodeRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchCodeRequest) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *SearchCodeRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *SearchCodeRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type CodeLine struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Line  uint32                 `protobuf:"varint,1,opt,name=line,proto3" json:"line,omitempty"`
+	Text  string                 `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	// Where the terms are in `text`: start, end pairs in characters.
+	Ranges        []uint32 `protobuf:"varint,3,rep,packed,name=ranges,proto3" json:"ranges,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CodeLine) Reset() {
+	*x = CodeLine{}
+	mi := &file_gd_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CodeLine) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CodeLine) ProtoMessage() {}
+
+func (x *CodeLine) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CodeLine.ProtoReflect.Descriptor instead.
+func (*CodeLine) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *CodeLine) GetLine() uint32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+func (x *CodeLine) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *CodeLine) GetRanges() []uint32 {
+	if x != nil {
+		return x.Ranges
+	}
+	return nil
+}
+
+type CodeHit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Path  string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Lines []*CodeLine            `protobuf:"bytes,2,rep,name=lines,proto3" json:"lines,omitempty"`
+	// Matching lines not shown.
+	More          uint32 `protobuf:"varint,3,opt,name=more,proto3" json:"more,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CodeHit) Reset() {
+	*x = CodeHit{}
+	mi := &file_gd_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CodeHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CodeHit) ProtoMessage() {}
+
+func (x *CodeHit) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CodeHit.ProtoReflect.Descriptor instead.
+func (*CodeHit) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *CodeHit) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *CodeHit) GetLines() []*CodeLine {
+	if x != nil {
+		return x.Lines
+	}
+	return nil
+}
+
+func (x *CodeHit) GetMore() uint32 {
+	if x != nil {
+		return x.More
+	}
+	return 0
+}
+
+type SearchCodeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Hits  []*CodeHit             `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
+	// Files that match, up to 5,000.
+	Files         uint32 `protobuf:"varint,2,opt,name=files,proto3" json:"files,omitempty"`
+	NextPageToken string `protobuf:"bytes,3,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	// The changeset the index is at, and whether the branch has moved past it (the index is
+	// catching up).
+	IndexedAt     []byte `protobuf:"bytes,4,opt,name=indexed_at,json=indexedAt,proto3" json:"indexed_at,omitempty"`
+	CatchingUp    bool   `protobuf:"varint,5,opt,name=catching_up,json=catchingUp,proto3" json:"catching_up,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchCodeResponse) Reset() {
+	*x = SearchCodeResponse{}
+	mi := &file_gd_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchCodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchCodeResponse) ProtoMessage() {}
+
+func (x *SearchCodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchCodeResponse.ProtoReflect.Descriptor instead.
+func (*SearchCodeResponse) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *SearchCodeResponse) GetHits() []*CodeHit {
+	if x != nil {
+		return x.Hits
+	}
+	return nil
+}
+
+func (x *SearchCodeResponse) GetFiles() uint32 {
+	if x != nil {
+		return x.Files
+	}
+	return 0
+}
+
+func (x *SearchCodeResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+func (x *SearchCodeResponse) GetIndexedAt() []byte {
+	if x != nil {
+		return x.IndexedAt
+	}
+	return nil
+}
+
+func (x *SearchCodeResponse) GetCatchingUp() bool {
+	if x != nil {
+		return x.CatchingUp
+	}
+	return false
+}
+
+type FindSymbolRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The name, or its start.
+	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Ref           string `protobuf:"bytes,2,opt,name=ref,proto3" json:"ref,omitempty"`
+	Limit         uint32 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FindSymbolRequest) Reset() {
+	*x = FindSymbolRequest{}
+	mi := &file_gd_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FindSymbolRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FindSymbolRequest) ProtoMessage() {}
+
+func (x *FindSymbolRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FindSymbolRequest.ProtoReflect.Descriptor instead.
+func (*FindSymbolRequest) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *FindSymbolRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FindSymbolRequest) GetRef() string {
+	if x != nil {
+		return x.Ref
+	}
+	return ""
+}
+
+func (x *FindSymbolRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type SymbolHit struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// fn, struct, class, interface, type, def, …
+	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Path string `protobuf:"bytes,3,opt,name=path,proto3" json:"path,omitempty"`
+	Line uint32 `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
+	// The line that defines it.
+	Text          string `protobuf:"bytes,5,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SymbolHit) Reset() {
+	*x = SymbolHit{}
+	mi := &file_gd_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SymbolHit) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SymbolHit) ProtoMessage() {}
+
+func (x *SymbolHit) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SymbolHit.ProtoReflect.Descriptor instead.
+func (*SymbolHit) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *SymbolHit) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *SymbolHit) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *SymbolHit) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *SymbolHit) GetLine() uint32 {
+	if x != nil {
+		return x.Line
+	}
+	return 0
+}
+
+func (x *SymbolHit) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type FindSymbolResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Symbols       []*SymbolHit           `protobuf:"bytes,1,rep,name=symbols,proto3" json:"symbols,omitempty"`
+	IndexedAt     []byte                 `protobuf:"bytes,2,opt,name=indexed_at,json=indexedAt,proto3" json:"indexed_at,omitempty"`
+	CatchingUp    bool                   `protobuf:"varint,3,opt,name=catching_up,json=catchingUp,proto3" json:"catching_up,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FindSymbolResponse) Reset() {
+	*x = FindSymbolResponse{}
+	mi := &file_gd_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FindSymbolResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FindSymbolResponse) ProtoMessage() {}
+
+func (x *FindSymbolResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FindSymbolResponse.ProtoReflect.Descriptor instead.
+func (*FindSymbolResponse) Descriptor() ([]byte, []int) {
+	return file_gd_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *FindSymbolResponse) GetSymbols() []*SymbolHit {
+	if x != nil {
+		return x.Symbols
+	}
+	return nil
+}
+
+func (x *FindSymbolResponse) GetIndexedAt() []byte {
+	if x != nil {
+		return x.IndexedAt
+	}
+	return nil
+}
+
+func (x *FindSymbolResponse) GetCatchingUp() bool {
+	if x != nil {
+		return x.CatchingUp
+	}
+	return false
+}
+
 type WhoAmIResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Principal     string                 `protobuf:"bytes,1,opt,name=principal,proto3" json:"principal,omitempty"`
@@ -1801,7 +2761,7 @@ type WhoAmIResponse struct {
 
 func (x *WhoAmIResponse) Reset() {
 	*x = WhoAmIResponse{}
-	mi := &file_gd_proto_msgTypes[33]
+	mi := &file_gd_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1813,7 +2773,7 @@ func (x *WhoAmIResponse) String() string {
 func (*WhoAmIResponse) ProtoMessage() {}
 
 func (x *WhoAmIResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[33]
+	mi := &file_gd_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1826,7 +2786,7 @@ func (x *WhoAmIResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WhoAmIResponse.ProtoReflect.Descriptor instead.
 func (*WhoAmIResponse) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{33}
+	return file_gd_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *WhoAmIResponse) GetPrincipal() string {
@@ -1861,7 +2821,7 @@ type LockRequest struct {
 
 func (x *LockRequest) Reset() {
 	*x = LockRequest{}
-	mi := &file_gd_proto_msgTypes[34]
+	mi := &file_gd_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1873,7 +2833,7 @@ func (x *LockRequest) String() string {
 func (*LockRequest) ProtoMessage() {}
 
 func (x *LockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[34]
+	mi := &file_gd_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1886,7 +2846,7 @@ func (x *LockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LockRequest.ProtoReflect.Descriptor instead.
 func (*LockRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{34}
+	return file_gd_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *LockRequest) GetPath() string {
@@ -1907,7 +2867,7 @@ type UnlockRequest struct {
 
 func (x *UnlockRequest) Reset() {
 	*x = UnlockRequest{}
-	mi := &file_gd_proto_msgTypes[35]
+	mi := &file_gd_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1919,7 +2879,7 @@ func (x *UnlockRequest) String() string {
 func (*UnlockRequest) ProtoMessage() {}
 
 func (x *UnlockRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[35]
+	mi := &file_gd_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1932,7 +2892,7 @@ func (x *UnlockRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnlockRequest.ProtoReflect.Descriptor instead.
 func (*UnlockRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{35}
+	return file_gd_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *UnlockRequest) GetPath() string {
@@ -1958,7 +2918,7 @@ type ListLocksRequest struct {
 
 func (x *ListLocksRequest) Reset() {
 	*x = ListLocksRequest{}
-	mi := &file_gd_proto_msgTypes[36]
+	mi := &file_gd_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1970,7 +2930,7 @@ func (x *ListLocksRequest) String() string {
 func (*ListLocksRequest) ProtoMessage() {}
 
 func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[36]
+	mi := &file_gd_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1983,7 +2943,7 @@ func (x *ListLocksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListLocksRequest.ProtoReflect.Descriptor instead.
 func (*ListLocksRequest) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{36}
+	return file_gd_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *ListLocksRequest) GetPrefix() string {
@@ -2004,7 +2964,7 @@ type LockInfo struct {
 
 func (x *LockInfo) Reset() {
 	*x = LockInfo{}
-	mi := &file_gd_proto_msgTypes[37]
+	mi := &file_gd_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2016,7 +2976,7 @@ func (x *LockInfo) String() string {
 func (*LockInfo) ProtoMessage() {}
 
 func (x *LockInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[37]
+	mi := &file_gd_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2029,7 +2989,7 @@ func (x *LockInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LockInfo.ProtoReflect.Descriptor instead.
 func (*LockInfo) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{37}
+	return file_gd_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *LockInfo) GetPath() string {
@@ -2062,7 +3022,7 @@ type LockList struct {
 
 func (x *LockList) Reset() {
 	*x = LockList{}
-	mi := &file_gd_proto_msgTypes[38]
+	mi := &file_gd_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2074,7 +3034,7 @@ func (x *LockList) String() string {
 func (*LockList) ProtoMessage() {}
 
 func (x *LockList) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_proto_msgTypes[38]
+	mi := &file_gd_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2087,7 +3047,7 @@ func (x *LockList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LockList.ProtoReflect.Descriptor instead.
 func (*LockList) Descriptor() ([]byte, []int) {
-	return file_gd_proto_rawDescGZIP(), []int{38}
+	return file_gd_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *LockList) GetLocks() []*LockInfo {
@@ -2116,7 +3076,7 @@ const file_gd_proto_rawDesc = "" +
 	"FileChange\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04blob\x18\x02 \x01(\fR\x04blob\x12\x12\n" +
-	"\x04mode\x18\x03 \x01(\x05R\x04mode\"\x92\x01\n" +
+	"\x04mode\x18\x03 \x01(\x05R\x04mode\"\xc5\x01\n" +
 	"\rChangesetInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12\x1b\n" +
 	"\troot_tree\x18\x02 \x01(\fR\brootTree\x12\x1e\n" +
@@ -2124,13 +3084,37 @@ const file_gd_proto_rawDesc = "" +
 	"generation\x18\x03 \x01(\x04R\n" +
 	"generation\x12\x18\n" +
 	"\aencoded\x18\x04 \x01(\fR\aencoded\x12\x1a\n" +
-	"\bredacted\x18\x05 \x01(\bR\bredacted\"\xb4\x01\n" +
+	"\bredacted\x18\x05 \x01(\bR\bredacted\x121\n" +
+	"\n" +
+	"provenance\x18\x06 \x01(\v2\x11.gd.v1.ProvenanceR\n" +
+	"provenance\"\x8b\x01\n" +
+	"\n" +
+	"Provenance\x12\x0e\n" +
+	"\x02by\x18\x01 \x01(\tR\x02by\x12\x14\n" +
+	"\x05agent\x18\x02 \x01(\bR\x05agent\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x18\n" +
+	"\asession\x18\x04 \x01(\tR\asession\x12\x12\n" +
+	"\x04task\x18\x05 \x01(\x04R\x04task\x12\x13\n" +
+	"\x05at_ms\x18\x06 \x01(\x03R\x04atMs\"\xbd\x02\n" +
 	"\x16CreateChangesetRequest\x12\x18\n" +
 	"\aparents\x18\x01 \x03(\fR\aparents\x12+\n" +
 	"\achanges\x18\x02 \x03(\v2\x11.gd.v1.FileChangeR\achanges\x12\x16\n" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12!\n" +
-	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\"\"\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\x12\x10\n" +
+	"\x03git\x18\x06 \x01(\fR\x03git\x12\x14\n" +
+	"\x05model\x18\a \x01(\tR\x05model\x12\x18\n" +
+	"\asession\x18\b \x01(\tR\asession\x12\x12\n" +
+	"\x04task\x18\t \x01(\x04R\x04task\x121\n" +
+	"\vparent_refs\x18\n" +
+	" \x03(\v2\x10.gd.v1.ParentRefR\n" +
+	"parentRefs\"C\n" +
+	"\tParentRef\x12\x10\n" +
+	"\x02id\x18\x01 \x01(\fH\x00R\x02id\x12\x1a\n" +
+	"\aearlier\x18\x02 \x01(\rH\x00R\aearlierB\b\n" +
+	"\x06parent\"\"\n" +
+	"\x10CreatedChangeset\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\fR\x02id\"\"\n" +
 	"\x0eResolveRequest\x12\x10\n" +
 	"\x03rev\x18\x01 \x01(\tR\x03rev\"\x1d\n" +
 	"\aRefName\x12\x12\n" +
@@ -2150,10 +3134,11 @@ const file_gd_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\fR\x02id\".\n" +
 	"\aRefList\x12#\n" +
-	"\x04refs\x18\x01 \x03(\v2\x0f.gd.v1.RefEntryR\x04refs\"=\n" +
+	"\x04refs\x18\x01 \x03(\v2\x0f.gd.v1.RefEntryR\x04refs\"`\n" +
 	"\vLandRequest\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1c\n" +
-	"\tchangeset\x18\x02 \x01(\fR\tchangeset\"\\\n" +
+	"\tchangeset\x18\x02 \x01(\fR\tchangeset\x12!\n" +
+	"\ffast_forward\x18\x03 \x01(\bR\vfastForward\"\\\n" +
 	"\fLandResponse\x12\x16\n" +
 	"\x06landed\x18\x01 \x01(\fR\x06landed\x12\x18\n" +
 	"\arebased\x18\x02 \x01(\bR\arebased\x12\x1a\n" +
@@ -2165,12 +3150,31 @@ const file_gd_proto_rawDesc = "" +
 	"\x05limit\x18\x03 \x01(\rR\x05limit\"4\n" +
 	"\fBlameRequest\x12\x10\n" +
 	"\x03rev\x18\x01 \x01(\tR\x03rev\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\"=\n" +
+	"\x04path\x18\x02 \x01(\tR\x04path\"n\n" +
 	"\tBlameLine\x12\x1c\n" +
 	"\tchangeset\x18\x01 \x01(\fR\tchangeset\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"7\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x1f\n" +
+	"\vorigin_line\x18\x03 \x01(\rR\n" +
+	"originLine\x12\x0e\n" +
+	"\x02by\x18\x04 \x01(\tR\x02by\"|\n" +
+	"\n" +
+	"LineAuthor\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\bR\x05agent\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12\x16\n" +
+	"\x06person\x18\x04 \x01(\tR\x06person\x12\x16\n" +
+	"\x06source\x18\x05 \x01(\tR\x06source\"\xc3\x01\n" +
 	"\rBlameResponse\x12&\n" +
-	"\x05lines\x18\x01 \x03(\v2\x10.gd.v1.BlameLineR\x05lines\"1\n" +
+	"\x05lines\x18\x01 \x03(\v2\x10.gd.v1.BlameLineR\x05lines\x12;\n" +
+	"\aauthors\x18\x02 \x03(\v2!.gd.v1.BlameResponse.AuthorsEntryR\aauthors\x1aM\n" +
+	"\fAuthorsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12'\n" +
+	"\x05value\x18\x02 \x01(\v2\x11.gd.v1.LineAuthorR\x05value:\x028\x01\"J\n" +
+	"\x16AttachGitAiNoteRequest\x12\x1c\n" +
+	"\tchangeset\x18\x01 \x01(\fR\tchangeset\x12\x12\n" +
+	"\x04note\x18\x02 \x01(\tR\x04note\"'\n" +
+	"\x11GitAiNoteResponse\x12\x12\n" +
+	"\x04note\x18\x01 \x01(\tR\x04note\"1\n" +
 	"\vDiffRequest\x12\x12\n" +
 	"\x04from\x18\x01 \x01(\tR\x04from\x12\x0e\n" +
 	"\x02to\x18\x02 \x01(\tR\x02to\";\n" +
@@ -2211,6 +3215,44 @@ const file_gd_proto_rawDesc = "" +
 	"\x02id\x18\x03 \x01(\fR\x02id\x12\x12\n" +
 	"\x04data\x18\x04 \x01(\fR\x04data\x12\x12\n" +
 	"\x04last\x18\x05 \x01(\bR\x04last\"p\n" +
+	"\x11SearchCodeRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x12\x10\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"J\n" +
+	"\bCodeLine\x12\x12\n" +
+	"\x04line\x18\x01 \x01(\rR\x04line\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x16\n" +
+	"\x06ranges\x18\x03 \x03(\rR\x06ranges\"X\n" +
+	"\aCodeHit\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12%\n" +
+	"\x05lines\x18\x02 \x03(\v2\x0f.gd.v1.CodeLineR\x05lines\x12\x12\n" +
+	"\x04more\x18\x03 \x01(\rR\x04more\"\xb6\x01\n" +
+	"\x12SearchCodeResponse\x12\"\n" +
+	"\x04hits\x18\x01 \x03(\v2\x0e.gd.v1.CodeHitR\x04hits\x12\x14\n" +
+	"\x05files\x18\x02 \x01(\rR\x05files\x12&\n" +
+	"\x0fnext_page_token\x18\x03 \x01(\tR\rnextPageToken\x12\x1d\n" +
+	"\n" +
+	"indexed_at\x18\x04 \x01(\fR\tindexedAt\x12\x1f\n" +
+	"\vcatching_up\x18\x05 \x01(\bR\n" +
+	"catchingUp\"O\n" +
+	"\x11FindSymbolRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
+	"\x03ref\x18\x02 \x01(\tR\x03ref\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\"o\n" +
+	"\tSymbolHit\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04path\x18\x03 \x01(\tR\x04path\x12\x12\n" +
+	"\x04line\x18\x04 \x01(\rR\x04line\x12\x12\n" +
+	"\x04text\x18\x05 \x01(\tR\x04text\"\x80\x01\n" +
+	"\x12FindSymbolResponse\x12*\n" +
+	"\asymbols\x18\x01 \x03(\v2\x10.gd.v1.SymbolHitR\asymbols\x12\x1d\n" +
+	"\n" +
+	"indexed_at\x18\x02 \x01(\fR\tindexedAt\x12\x1f\n" +
+	"\vcatching_up\x18\x03 \x01(\bR\n" +
+	"catchingUp\"p\n" +
 	"\x0eWhoAmIResponse\x12\x1c\n" +
 	"\tprincipal\x18\x01 \x01(\tR\tprincipal\x12\x1b\n" +
 	"\tfull_read\x18\x02 \x01(\bR\bfullRead\x12#\n" +
@@ -2232,24 +3274,34 @@ const file_gd_proto_rawDesc = "" +
 	"\aObjects\x12,\n" +
 	"\x03Get\x12\r.gd.v1.IdList\x1a\x14.gd.v1.ObjectPayload0\x01\x128\n" +
 	"\x03Put\x12\x14.gd.v1.ObjectPayload\x1a\x19.gd.v1.PutObjectsResponse(\x01\x12'\n" +
-	"\aMissing\x12\r.gd.v1.IdList\x1a\r.gd.v1.IdList2\x7f\n" +
+	"\aMissing\x12\r.gd.v1.IdList\x1a\r.gd.v1.IdList2\xc9\x01\n" +
 	"\n" +
 	"Changesets\x12=\n" +
-	"\x06Create\x12\x1d.gd.v1.CreateChangesetRequest\x1a\x14.gd.v1.ChangesetInfo\x122\n" +
+	"\x06Create\x12\x1d.gd.v1.CreateChangesetRequest\x1a\x14.gd.v1.ChangesetInfo\x12H\n" +
+	"\n" +
+	"CreateMany\x12\x1d.gd.v1.CreateChangesetRequest\x1a\x17.gd.v1.CreatedChangeset(\x010\x01\x122\n" +
 	"\x03Get\x12\x15.gd.v1.ResolveRequest\x1a\x14.gd.v1.ChangesetInfo2\x8d\x01\n" +
 	"\x04Refs\x12&\n" +
 	"\x03Get\x12\x0e.gd.v1.RefName\x1a\x0f.gd.v1.RefValue\x127\n" +
 	"\x0eCompareAndSwap\x12\x11.gd.v1.CasRequest\x1a\x12.gd.v1.CasResponse\x12$\n" +
 	"\x04List\x12\f.gd.v1.Empty\x1a\x0e.gd.v1.RefList27\n" +
 	"\x04Land\x12/\n" +
-	"\x04Land\x12\x12.gd.v1.LandRequest\x1a\x13.gd.v1.LandResponse2o\n" +
+	"\x04Land\x12\x12.gd.v1.LandRequest\x1a\x13.gd.v1.LandResponse2\xe4\x01\n" +
 	"\aHistory\x120\n" +
 	"\x03Log\x12\x11.gd.v1.LogRequest\x1a\x14.gd.v1.ChangesetInfo0\x01\x122\n" +
-	"\x05Blame\x12\x13.gd.v1.BlameRequest\x1a\x14.gd.v1.BlameResponse27\n" +
+	"\x05Blame\x12\x13.gd.v1.BlameRequest\x1a\x14.gd.v1.BlameResponse\x12>\n" +
+	"\x0fAttachGitAiNote\x12\x1d.gd.v1.AttachGitAiNoteRequest\x1a\f.gd.v1.Empty\x123\n" +
+	"\tGitAiNote\x12\f.gd.v1.IdMsg\x1a\x18.gd.v1.GitAiNoteResponse27\n" +
 	"\x04Diff\x12/\n" +
 	"\x04Diff\x12\x12.gd.v1.DiffRequest\x1a\x13.gd.v1.DiffResponse2K\n" +
 	"\tMergeBase\x12>\n" +
-	"\tMergeBase\x12\x17.gd.v1.MergeBaseRequest\x1a\x18.gd.v1.MergeBaseResponse2\xe9\x01\n" +
+	"\tMergeBase\x12\x17.gd.v1.MergeBaseRequest\x1a\x18.gd.v1.MergeBaseResponse2\x92\x01\n" +
+	"\n" +
+	"CodeSearch\x12A\n" +
+	"\n" +
+	"SearchCode\x12\x18.gd.v1.SearchCodeRequest\x1a\x19.gd.v1.SearchCodeResponse\x12A\n" +
+	"\n" +
+	"FindSymbol\x12\x18.gd.v1.FindSymbolRequest\x1a\x19.gd.v1.FindSymbolResponse2\xe9\x01\n" +
 	"\x06Browse\x127\n" +
 	"\aListDir\x12\x14.gd.v1.BrowseRequest\x1a\x16.gd.v1.ListDirResponse\x129\n" +
 	"\bReadFile\x12\x14.gd.v1.BrowseRequest\x1a\x17.gd.v1.ReadFileResponse\x12/\n" +
@@ -2274,7 +3326,7 @@ func file_gd_proto_rawDescGZIP() []byte {
 	return file_gd_proto_rawDescData
 }
 
-var file_gd_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
+var file_gd_proto_msgTypes = make([]protoimpl.MessageInfo, 53)
 var file_gd_proto_goTypes = []any{
 	(*Empty)(nil),                  // 0: gd.v1.Empty
 	(*IdMsg)(nil),                  // 1: gd.v1.IdMsg
@@ -2283,93 +3335,124 @@ var file_gd_proto_goTypes = []any{
 	(*PutObjectsResponse)(nil),     // 4: gd.v1.PutObjectsResponse
 	(*FileChange)(nil),             // 5: gd.v1.FileChange
 	(*ChangesetInfo)(nil),          // 6: gd.v1.ChangesetInfo
-	(*CreateChangesetRequest)(nil), // 7: gd.v1.CreateChangesetRequest
-	(*ResolveRequest)(nil),         // 8: gd.v1.ResolveRequest
-	(*RefName)(nil),                // 9: gd.v1.RefName
-	(*RefValue)(nil),               // 10: gd.v1.RefValue
-	(*CasRequest)(nil),             // 11: gd.v1.CasRequest
-	(*CasResponse)(nil),            // 12: gd.v1.CasResponse
-	(*RefEntry)(nil),               // 13: gd.v1.RefEntry
-	(*RefList)(nil),                // 14: gd.v1.RefList
-	(*LandRequest)(nil),            // 15: gd.v1.LandRequest
-	(*LandResponse)(nil),           // 16: gd.v1.LandResponse
-	(*LogRequest)(nil),             // 17: gd.v1.LogRequest
-	(*BlameRequest)(nil),           // 18: gd.v1.BlameRequest
-	(*BlameLine)(nil),              // 19: gd.v1.BlameLine
-	(*BlameResponse)(nil),          // 20: gd.v1.BlameResponse
-	(*DiffRequest)(nil),            // 21: gd.v1.DiffRequest
-	(*DiffResponse)(nil),           // 22: gd.v1.DiffResponse
-	(*MergeBaseRequest)(nil),       // 23: gd.v1.MergeBaseRequest
-	(*MergeBaseResponse)(nil),      // 24: gd.v1.MergeBaseResponse
-	(*BrowseRequest)(nil),          // 25: gd.v1.BrowseRequest
-	(*DirEntry)(nil),               // 26: gd.v1.DirEntry
-	(*ListDirResponse)(nil),        // 27: gd.v1.ListDirResponse
-	(*ReadFileResponse)(nil),       // 28: gd.v1.ReadFileResponse
-	(*FindRequest)(nil),            // 29: gd.v1.FindRequest
-	(*FindResponse)(nil),           // 30: gd.v1.FindResponse
-	(*CheckoutRequest)(nil),        // 31: gd.v1.CheckoutRequest
-	(*CheckoutPiece)(nil),          // 32: gd.v1.CheckoutPiece
-	(*WhoAmIResponse)(nil),         // 33: gd.v1.WhoAmIResponse
-	(*LockRequest)(nil),            // 34: gd.v1.LockRequest
-	(*UnlockRequest)(nil),          // 35: gd.v1.UnlockRequest
-	(*ListLocksRequest)(nil),       // 36: gd.v1.ListLocksRequest
-	(*LockInfo)(nil),               // 37: gd.v1.LockInfo
-	(*LockList)(nil),               // 38: gd.v1.LockList
+	(*Provenance)(nil),             // 7: gd.v1.Provenance
+	(*CreateChangesetRequest)(nil), // 8: gd.v1.CreateChangesetRequest
+	(*ParentRef)(nil),              // 9: gd.v1.ParentRef
+	(*CreatedChangeset)(nil),       // 10: gd.v1.CreatedChangeset
+	(*ResolveRequest)(nil),         // 11: gd.v1.ResolveRequest
+	(*RefName)(nil),                // 12: gd.v1.RefName
+	(*RefValue)(nil),               // 13: gd.v1.RefValue
+	(*CasRequest)(nil),             // 14: gd.v1.CasRequest
+	(*CasResponse)(nil),            // 15: gd.v1.CasResponse
+	(*RefEntry)(nil),               // 16: gd.v1.RefEntry
+	(*RefList)(nil),                // 17: gd.v1.RefList
+	(*LandRequest)(nil),            // 18: gd.v1.LandRequest
+	(*LandResponse)(nil),           // 19: gd.v1.LandResponse
+	(*LogRequest)(nil),             // 20: gd.v1.LogRequest
+	(*BlameRequest)(nil),           // 21: gd.v1.BlameRequest
+	(*BlameLine)(nil),              // 22: gd.v1.BlameLine
+	(*LineAuthor)(nil),             // 23: gd.v1.LineAuthor
+	(*BlameResponse)(nil),          // 24: gd.v1.BlameResponse
+	(*AttachGitAiNoteRequest)(nil), // 25: gd.v1.AttachGitAiNoteRequest
+	(*GitAiNoteResponse)(nil),      // 26: gd.v1.GitAiNoteResponse
+	(*DiffRequest)(nil),            // 27: gd.v1.DiffRequest
+	(*DiffResponse)(nil),           // 28: gd.v1.DiffResponse
+	(*MergeBaseRequest)(nil),       // 29: gd.v1.MergeBaseRequest
+	(*MergeBaseResponse)(nil),      // 30: gd.v1.MergeBaseResponse
+	(*BrowseRequest)(nil),          // 31: gd.v1.BrowseRequest
+	(*DirEntry)(nil),               // 32: gd.v1.DirEntry
+	(*ListDirResponse)(nil),        // 33: gd.v1.ListDirResponse
+	(*ReadFileResponse)(nil),       // 34: gd.v1.ReadFileResponse
+	(*FindRequest)(nil),            // 35: gd.v1.FindRequest
+	(*FindResponse)(nil),           // 36: gd.v1.FindResponse
+	(*CheckoutRequest)(nil),        // 37: gd.v1.CheckoutRequest
+	(*CheckoutPiece)(nil),          // 38: gd.v1.CheckoutPiece
+	(*SearchCodeRequest)(nil),      // 39: gd.v1.SearchCodeRequest
+	(*CodeLine)(nil),               // 40: gd.v1.CodeLine
+	(*CodeHit)(nil),                // 41: gd.v1.CodeHit
+	(*SearchCodeResponse)(nil),     // 42: gd.v1.SearchCodeResponse
+	(*FindSymbolRequest)(nil),      // 43: gd.v1.FindSymbolRequest
+	(*SymbolHit)(nil),              // 44: gd.v1.SymbolHit
+	(*FindSymbolResponse)(nil),     // 45: gd.v1.FindSymbolResponse
+	(*WhoAmIResponse)(nil),         // 46: gd.v1.WhoAmIResponse
+	(*LockRequest)(nil),            // 47: gd.v1.LockRequest
+	(*UnlockRequest)(nil),          // 48: gd.v1.UnlockRequest
+	(*ListLocksRequest)(nil),       // 49: gd.v1.ListLocksRequest
+	(*LockInfo)(nil),               // 50: gd.v1.LockInfo
+	(*LockList)(nil),               // 51: gd.v1.LockList
+	nil,                            // 52: gd.v1.BlameResponse.AuthorsEntry
 }
 var file_gd_proto_depIdxs = []int32{
-	5,  // 0: gd.v1.CreateChangesetRequest.changes:type_name -> gd.v1.FileChange
-	13, // 1: gd.v1.RefList.refs:type_name -> gd.v1.RefEntry
-	19, // 2: gd.v1.BlameResponse.lines:type_name -> gd.v1.BlameLine
-	5,  // 3: gd.v1.DiffResponse.changes:type_name -> gd.v1.FileChange
-	26, // 4: gd.v1.ListDirResponse.entries:type_name -> gd.v1.DirEntry
-	37, // 5: gd.v1.LockList.locks:type_name -> gd.v1.LockInfo
-	2,  // 6: gd.v1.Objects.Get:input_type -> gd.v1.IdList
-	3,  // 7: gd.v1.Objects.Put:input_type -> gd.v1.ObjectPayload
-	2,  // 8: gd.v1.Objects.Missing:input_type -> gd.v1.IdList
-	7,  // 9: gd.v1.Changesets.Create:input_type -> gd.v1.CreateChangesetRequest
-	8,  // 10: gd.v1.Changesets.Get:input_type -> gd.v1.ResolveRequest
-	9,  // 11: gd.v1.Refs.Get:input_type -> gd.v1.RefName
-	11, // 12: gd.v1.Refs.CompareAndSwap:input_type -> gd.v1.CasRequest
-	0,  // 13: gd.v1.Refs.List:input_type -> gd.v1.Empty
-	15, // 14: gd.v1.Land.Land:input_type -> gd.v1.LandRequest
-	17, // 15: gd.v1.History.Log:input_type -> gd.v1.LogRequest
-	18, // 16: gd.v1.History.Blame:input_type -> gd.v1.BlameRequest
-	21, // 17: gd.v1.Diff.Diff:input_type -> gd.v1.DiffRequest
-	23, // 18: gd.v1.MergeBase.MergeBase:input_type -> gd.v1.MergeBaseRequest
-	25, // 19: gd.v1.Browse.ListDir:input_type -> gd.v1.BrowseRequest
-	25, // 20: gd.v1.Browse.ReadFile:input_type -> gd.v1.BrowseRequest
-	29, // 21: gd.v1.Browse.Find:input_type -> gd.v1.FindRequest
-	31, // 22: gd.v1.Browse.Checkout:input_type -> gd.v1.CheckoutRequest
-	0,  // 23: gd.v1.Access.WhoAmI:input_type -> gd.v1.Empty
-	34, // 24: gd.v1.Locks.Lock:input_type -> gd.v1.LockRequest
-	35, // 25: gd.v1.Locks.Unlock:input_type -> gd.v1.UnlockRequest
-	36, // 26: gd.v1.Locks.List:input_type -> gd.v1.ListLocksRequest
-	3,  // 27: gd.v1.Objects.Get:output_type -> gd.v1.ObjectPayload
-	4,  // 28: gd.v1.Objects.Put:output_type -> gd.v1.PutObjectsResponse
-	2,  // 29: gd.v1.Objects.Missing:output_type -> gd.v1.IdList
-	6,  // 30: gd.v1.Changesets.Create:output_type -> gd.v1.ChangesetInfo
-	6,  // 31: gd.v1.Changesets.Get:output_type -> gd.v1.ChangesetInfo
-	10, // 32: gd.v1.Refs.Get:output_type -> gd.v1.RefValue
-	12, // 33: gd.v1.Refs.CompareAndSwap:output_type -> gd.v1.CasResponse
-	14, // 34: gd.v1.Refs.List:output_type -> gd.v1.RefList
-	16, // 35: gd.v1.Land.Land:output_type -> gd.v1.LandResponse
-	6,  // 36: gd.v1.History.Log:output_type -> gd.v1.ChangesetInfo
-	20, // 37: gd.v1.History.Blame:output_type -> gd.v1.BlameResponse
-	22, // 38: gd.v1.Diff.Diff:output_type -> gd.v1.DiffResponse
-	24, // 39: gd.v1.MergeBase.MergeBase:output_type -> gd.v1.MergeBaseResponse
-	27, // 40: gd.v1.Browse.ListDir:output_type -> gd.v1.ListDirResponse
-	28, // 41: gd.v1.Browse.ReadFile:output_type -> gd.v1.ReadFileResponse
-	30, // 42: gd.v1.Browse.Find:output_type -> gd.v1.FindResponse
-	32, // 43: gd.v1.Browse.Checkout:output_type -> gd.v1.CheckoutPiece
-	33, // 44: gd.v1.Access.WhoAmI:output_type -> gd.v1.WhoAmIResponse
-	37, // 45: gd.v1.Locks.Lock:output_type -> gd.v1.LockInfo
-	0,  // 46: gd.v1.Locks.Unlock:output_type -> gd.v1.Empty
-	38, // 47: gd.v1.Locks.List:output_type -> gd.v1.LockList
-	27, // [27:48] is the sub-list for method output_type
-	6,  // [6:27] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	7,  // 0: gd.v1.ChangesetInfo.provenance:type_name -> gd.v1.Provenance
+	5,  // 1: gd.v1.CreateChangesetRequest.changes:type_name -> gd.v1.FileChange
+	9,  // 2: gd.v1.CreateChangesetRequest.parent_refs:type_name -> gd.v1.ParentRef
+	16, // 3: gd.v1.RefList.refs:type_name -> gd.v1.RefEntry
+	22, // 4: gd.v1.BlameResponse.lines:type_name -> gd.v1.BlameLine
+	52, // 5: gd.v1.BlameResponse.authors:type_name -> gd.v1.BlameResponse.AuthorsEntry
+	5,  // 6: gd.v1.DiffResponse.changes:type_name -> gd.v1.FileChange
+	32, // 7: gd.v1.ListDirResponse.entries:type_name -> gd.v1.DirEntry
+	40, // 8: gd.v1.CodeHit.lines:type_name -> gd.v1.CodeLine
+	41, // 9: gd.v1.SearchCodeResponse.hits:type_name -> gd.v1.CodeHit
+	44, // 10: gd.v1.FindSymbolResponse.symbols:type_name -> gd.v1.SymbolHit
+	50, // 11: gd.v1.LockList.locks:type_name -> gd.v1.LockInfo
+	23, // 12: gd.v1.BlameResponse.AuthorsEntry.value:type_name -> gd.v1.LineAuthor
+	2,  // 13: gd.v1.Objects.Get:input_type -> gd.v1.IdList
+	3,  // 14: gd.v1.Objects.Put:input_type -> gd.v1.ObjectPayload
+	2,  // 15: gd.v1.Objects.Missing:input_type -> gd.v1.IdList
+	8,  // 16: gd.v1.Changesets.Create:input_type -> gd.v1.CreateChangesetRequest
+	8,  // 17: gd.v1.Changesets.CreateMany:input_type -> gd.v1.CreateChangesetRequest
+	11, // 18: gd.v1.Changesets.Get:input_type -> gd.v1.ResolveRequest
+	12, // 19: gd.v1.Refs.Get:input_type -> gd.v1.RefName
+	14, // 20: gd.v1.Refs.CompareAndSwap:input_type -> gd.v1.CasRequest
+	0,  // 21: gd.v1.Refs.List:input_type -> gd.v1.Empty
+	18, // 22: gd.v1.Land.Land:input_type -> gd.v1.LandRequest
+	20, // 23: gd.v1.History.Log:input_type -> gd.v1.LogRequest
+	21, // 24: gd.v1.History.Blame:input_type -> gd.v1.BlameRequest
+	25, // 25: gd.v1.History.AttachGitAiNote:input_type -> gd.v1.AttachGitAiNoteRequest
+	1,  // 26: gd.v1.History.GitAiNote:input_type -> gd.v1.IdMsg
+	27, // 27: gd.v1.Diff.Diff:input_type -> gd.v1.DiffRequest
+	29, // 28: gd.v1.MergeBase.MergeBase:input_type -> gd.v1.MergeBaseRequest
+	39, // 29: gd.v1.CodeSearch.SearchCode:input_type -> gd.v1.SearchCodeRequest
+	43, // 30: gd.v1.CodeSearch.FindSymbol:input_type -> gd.v1.FindSymbolRequest
+	31, // 31: gd.v1.Browse.ListDir:input_type -> gd.v1.BrowseRequest
+	31, // 32: gd.v1.Browse.ReadFile:input_type -> gd.v1.BrowseRequest
+	35, // 33: gd.v1.Browse.Find:input_type -> gd.v1.FindRequest
+	37, // 34: gd.v1.Browse.Checkout:input_type -> gd.v1.CheckoutRequest
+	0,  // 35: gd.v1.Access.WhoAmI:input_type -> gd.v1.Empty
+	47, // 36: gd.v1.Locks.Lock:input_type -> gd.v1.LockRequest
+	48, // 37: gd.v1.Locks.Unlock:input_type -> gd.v1.UnlockRequest
+	49, // 38: gd.v1.Locks.List:input_type -> gd.v1.ListLocksRequest
+	3,  // 39: gd.v1.Objects.Get:output_type -> gd.v1.ObjectPayload
+	4,  // 40: gd.v1.Objects.Put:output_type -> gd.v1.PutObjectsResponse
+	2,  // 41: gd.v1.Objects.Missing:output_type -> gd.v1.IdList
+	6,  // 42: gd.v1.Changesets.Create:output_type -> gd.v1.ChangesetInfo
+	10, // 43: gd.v1.Changesets.CreateMany:output_type -> gd.v1.CreatedChangeset
+	6,  // 44: gd.v1.Changesets.Get:output_type -> gd.v1.ChangesetInfo
+	13, // 45: gd.v1.Refs.Get:output_type -> gd.v1.RefValue
+	15, // 46: gd.v1.Refs.CompareAndSwap:output_type -> gd.v1.CasResponse
+	17, // 47: gd.v1.Refs.List:output_type -> gd.v1.RefList
+	19, // 48: gd.v1.Land.Land:output_type -> gd.v1.LandResponse
+	6,  // 49: gd.v1.History.Log:output_type -> gd.v1.ChangesetInfo
+	24, // 50: gd.v1.History.Blame:output_type -> gd.v1.BlameResponse
+	0,  // 51: gd.v1.History.AttachGitAiNote:output_type -> gd.v1.Empty
+	26, // 52: gd.v1.History.GitAiNote:output_type -> gd.v1.GitAiNoteResponse
+	28, // 53: gd.v1.Diff.Diff:output_type -> gd.v1.DiffResponse
+	30, // 54: gd.v1.MergeBase.MergeBase:output_type -> gd.v1.MergeBaseResponse
+	42, // 55: gd.v1.CodeSearch.SearchCode:output_type -> gd.v1.SearchCodeResponse
+	45, // 56: gd.v1.CodeSearch.FindSymbol:output_type -> gd.v1.FindSymbolResponse
+	33, // 57: gd.v1.Browse.ListDir:output_type -> gd.v1.ListDirResponse
+	34, // 58: gd.v1.Browse.ReadFile:output_type -> gd.v1.ReadFileResponse
+	36, // 59: gd.v1.Browse.Find:output_type -> gd.v1.FindResponse
+	38, // 60: gd.v1.Browse.Checkout:output_type -> gd.v1.CheckoutPiece
+	46, // 61: gd.v1.Access.WhoAmI:output_type -> gd.v1.WhoAmIResponse
+	50, // 62: gd.v1.Locks.Lock:output_type -> gd.v1.LockInfo
+	0,  // 63: gd.v1.Locks.Unlock:output_type -> gd.v1.Empty
+	51, // 64: gd.v1.Locks.List:output_type -> gd.v1.LockList
+	39, // [39:65] is the sub-list for method output_type
+	13, // [13:39] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_gd_proto_init() }
@@ -2377,15 +3460,19 @@ func file_gd_proto_init() {
 	if File_gd_proto != nil {
 		return
 	}
+	file_gd_proto_msgTypes[9].OneofWrappers = []any{
+		(*ParentRef_Id)(nil),
+		(*ParentRef_Earlier)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gd_proto_rawDesc), len(file_gd_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   39,
+			NumMessages:   53,
 			NumExtensions: 0,
-			NumServices:   10,
+			NumServices:   11,
 		},
 		GoTypes:           file_gd_proto_goTypes,
 		DependencyIndexes: file_gd_proto_depIdxs,

@@ -26,7 +26,7 @@ use crate::containers::{JobBox, Mode};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Channel;
 
 const RUNNER_HEADER: &str = "x-gd-runner";
 
@@ -261,7 +261,7 @@ impl tonic::service::Interceptor for KeyHeader {
 }
 
 fn client(saved: &Saved) -> Result<Client> {
-    let channel = Endpoint::from_shared(saved.server.clone())?.tcp_nodelay(true).connect_lazy();
+    let channel = grovedock_proto::endpoint(saved.server.clone())?.tcp_nodelay(true).connect_lazy();
     let key = tonic::metadata::AsciiMetadataValue::try_from(saved.key.as_str())
         .map_err(|_| anyhow!("the saved runner key is damaged"))?;
     Ok(RunsClient::with_interceptor(channel, KeyHeader(key))

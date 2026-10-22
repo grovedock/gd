@@ -1,26 +1,29 @@
-/* Shared by the landing and pricing pages. Brand: docs/assets/brand; gold means "landed" only.
-   The night band (header and hero) is the grove at dusk: deep Fishlake in both themes. */
+/* Shared by the landing and pricing pages. Brand: docs/assets/brand.
+   The page is the trunk: people are circles, agents squares, an open ring is where main is now.
+   Gold lives only in the logo's dot. */
 @font-face { font-family: "Schibsted Grotesk"; font-weight: 400 900; font-display: swap; src: url(fonts/schibsted-grotesk-latin-wght-normal.woff2) format("woff2"); }
 @font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
 
 :root {
-  --bark: #EEF1EC; --eye: #23282D; --fishlake: #16324F; --night: #0F2338; --lichen: #8FA89A; --gold: #F0B429;
-  --bg: var(--bark); --raised: #F8FAF7; --sunken: #E4E9E5; --ink: var(--eye); --muted: #4F5962; --rule: #D3DBD5;
-  --link: var(--fishlake); --code: #E2E8E3; --btn: var(--fishlake); --btn-ink: var(--bark);
-  --git: #A3B5AB; --gd: var(--fishlake);
-  --shadow: 0 1px 0 rgb(255 255 255 / 0.7) inset, 0 1px 2px rgb(22 50 79 / 0.06), 0 18px 40px -22px rgb(22 50 79 / 0.28);
+  --bg: #EEF1EC; --band: #E3E8E2; --raised: #F8FAF7; --sunken: #E4E9E5;
+  --ink: #13202B; --muted: #4E5A64; --faint: #6A7680; --rule: #D3DBD5;
+  --navy: #16324F; --lichen: #4E7A63; --baseline: #A3B5AB; --night: #0F2338;
+  --link: #1D4F80; --code: #E2E8E3; --btn: var(--navy); --btn-ink: #F4F5F2;
+  --gd: var(--navy); --git: var(--baseline);
+  --shadow: 0 1px 2px rgb(22 50 79 / 0.06), 0 18px 40px -24px rgb(22 50 79 / 0.3);
   --sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --wrap: 74rem; --gutter: clamp(1rem, 4vw, 2.5rem);
-  --r-sm: 6px; --r-md: 10px; --r-lg: 18px;
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1E2328; --raised: #262C32; --sunken: #191D21; --ink: var(--bark); --muted: #AEB8B2; --rule: #353D44;
-    --link: #A9C9E8; --code: #171B1F; --btn: var(--bark); --btn-ink: var(--fishlake);
-    --git: #5F7468; --gd: #A9C9E8;
-    --shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 18px 40px -24px rgb(0 0 0 / 0.6);
+    --bg: #0E1620; --band: #0B121A; --raised: #15212D; --sunken: #0B121A;
+    --ink: #E8EDF2; --muted: #AAB7C4; --faint: #8796A5; --rule: #24323F;
+    --navy: #8CB8E6; --lichen: #8FB8A0; --baseline: #4F6458; --night: #08111A;
+    --link: #8CB8E6; --code: #1A2734; --btn: #E8EDF2; --btn-ink: #0E1620;
+    --shadow: 0 18px 40px -24px rgb(0 0 0 / 0.7);
     color-scheme: dark;
   }
 }
@@ -42,35 +45,29 @@ p { max-width: 38rem; }
 .muted { color: var(--muted); }
 .small { font-size: 0.9rem; }
 
-/* The night band: header and hero share it. */
-.band {
-  --ink: var(--bark); --muted: #B4C3D2; --link: #CFE0F1; --rule: rgb(238 241 236 / 0.14);
-  --btn: var(--bark); --btn-ink: var(--fishlake);
-  background: var(--night); color: var(--ink); color-scheme: dark;
-}
-.band :focus-visible { outline-color: var(--gold); }
+/* The band: header and the top of a page share it. */
+.band { background: var(--band); }
 
 /* Header */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.15rem; }
 .brand { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--ink); text-decoration: none; font-weight: 750; font-size: 1.2rem; letter-spacing: -0.02em; }
-.brand img { border-radius: 8px; box-shadow: 0 0 0 1px rgb(238 241 236 / 0.16); }
+.brand img { border-radius: 8px; }
 .top nav { display: flex; flex-wrap: wrap; gap: 0.3rem 0.25rem; font-size: 0.95rem; }
-.top nav a { color: var(--ink); text-decoration: none; padding: 0.4rem 0.7rem; border-radius: 999px; opacity: 0.86; }
-.top nav a:hover { opacity: 1; background: rgb(238 241 236 / 0.08); }
-.top nav a[aria-current] { opacity: 1; background: rgb(238 241 236 / 0.12); }
+.top nav a { color: var(--ink); text-decoration: none; padding: 0.4rem 0.7rem; border-radius: 999px; }
+.top nav a:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+.top nav a[aria-current] { background: color-mix(in srgb, var(--ink) 10%, transparent); }
 
 /* Buttons: primary is solid, secondary a hairline. */
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
-.btn { display: inline-flex; align-items: center; min-height: 2.9rem; padding: 0 1.25rem; border-radius: var(--r-md); background: var(--btn); color: var(--btn-ink); font-weight: 650; text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s, border-color 0.15s, transform 0.15s; }
-.btn:hover { text-decoration: none; transform: translateY(-1px); }
-.btn:active { transform: none; }
+.btn { display: inline-flex; align-items: center; min-height: 2.9rem; padding: 0 1.25rem; border-radius: var(--r-md); background: var(--btn); color: var(--btn-ink); font-weight: 650; text-decoration: none; border: 1px solid transparent; transition: background-color 0.15s, border-color 0.15s; }
+.btn:hover { text-decoration: none; background: color-mix(in srgb, var(--btn) 88%, var(--bg)); }
 .btn.line { background: transparent; color: var(--ink); border-color: color-mix(in srgb, var(--ink) 28%, transparent); }
 .btn.line:hover { border-color: color-mix(in srgb, var(--ink) 60%, transparent); }
 .text-link { font-weight: 600; text-decoration: none; padding-inline: 0.4rem; }
 .text-link:hover { text-decoration: underline; }
 
 /* Sections: heading on the left, content on the right. */
-.sec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr); gap: 1.25rem clamp(2rem, 6vw, 5rem); padding-block: clamp(3.5rem, 9vw, 7rem); border-top: 1px solid var(--rule); }
+.sec { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr); gap: 1.25rem clamp(2rem, 6vw, 5rem); padding-block: clamp(3.5rem, 8vw, 6rem); border-top: 1px solid var(--rule); }
 .sec > h2 { font-size: clamp(1.75rem, 3.2vw, 2.5rem); line-height: 1.05; margin: 0; letter-spacing: -0.035em; }
 .sec > div > :first-child { margin-top: 0; }
 .sec > div > p:first-child { font-size: 1.15rem; }
@@ -79,20 +76,19 @@ h3 { font-size: 1.125rem; margin: 2.25rem 0 0.5rem; letter-spacing: -0.015em; }
 .panel { background: var(--raised); border: 1px solid var(--rule); border-radius: var(--r-lg); box-shadow: var(--shadow); }
 pre { background: var(--code); border-radius: var(--r-md); padding: 1rem 1.15rem; overflow-x: auto; line-height: 1.7; font-size: 0.86rem; margin: 0 0 1rem; }
 pre code { font-size: inherit; }
-
-ol.steps, ul.plain { list-style: none; padding: 0; margin: 0 0 1.5rem; }
-ol.steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
-ol.steps li { counter-increment: s; border-top: 2px solid var(--gd); padding-top: 1rem; }
-ol.steps li::before { content: counter(s); display: block; font-size: 2.25rem; font-weight: 800; line-height: 1; letter-spacing: -0.04em; color: var(--git); margin-bottom: 0.75rem; }
-ol.steps strong, ul.plain strong { display: block; margin-bottom: 0.25rem; }
-ol.steps .muted { font-size: 0.95rem; }
+ul.plain { list-style: none; padding: 0; margin: 0 0 1.5rem; }
+ul.plain strong { display: block; margin-bottom: 0.25rem; }
 ul.plain li { padding: 1.1rem 0; border-top: 1px solid var(--rule); max-width: 44rem; }
+
+/* Nodes on the trunk: people round, agents square, the ring where main is. */
+.node { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--navy); }
+.node.agent { border-radius: 2px; background: var(--lichen); }
+.ring { display: inline-block; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--lichen); background: var(--bg); }
 
 /* Footer */
 footer { border-top: 1px solid var(--rule); padding-block: clamp(2.5rem, 6vw, 4rem) 3rem; font-size: 0.92rem; color: var(--muted); }
 .foot { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)); gap: 2rem; }
 .foot .brand { color: var(--ink); margin-bottom: 0.75rem; }
-.foot .brand img { box-shadow: none; }
 .foot p { margin: 0 0 0.5rem; max-width: 30rem; }
 .foot nav { display: flex; flex-direction: column; gap: 0.45rem; }
 .foot nav a { color: var(--ink); text-decoration: none; width: fit-content; }
@@ -103,9 +99,8 @@ footer { border-top: 1px solid var(--rule); padding-block: clamp(2.5rem, 6vw, 4r
 
 @media (max-width: 860px) {
   .sec { grid-template-columns: minmax(0, 1fr); }
-  ol.steps { grid-template-columns: minmax(0, 1fr); }
   .foot { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .foot > :first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) { .top nav .wide { display: none; } .top nav a { padding-inline: 0.5rem; } }
-@media (prefers-reduced-motion: reduce) { .btn { transition: none; } .btn:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .btn { transition: none; } }

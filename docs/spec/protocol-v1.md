@@ -83,6 +83,12 @@ FileChange { string path = 1; bytes blob = 2; Mode mode = 3; }   // empty blob: 
 - `git`, when present, holds what is needed to recreate the exact git commit the changeset came
   from (author and committer lines, raw message, signature, submodule entries, and the commit id
   it must reproduce). Changesets made with gd don't have it, so their ids don't depend on git.
+- `Changesets.CreateMany` (since 1.1) takes a stream of the same requests and answers each, in
+  order, with its id, so a client sends a whole history without a round trip per change. A
+  parent in `parent_refs` is either an id or `earlier: N`, the change made at position N
+  (from 0) on the same stream. The result is exactly what the same requests sent one by one to
+  `Create` would give, ids included. **[CS-6]** A server MAY answer `UNIMPLEMENTED`; clients
+  then send the changes one by one. At most 10,000 changes per call.
 - A server MAY keep a **provenance** record beside a changeset made with gd: the account that
   uploaded it and what an agent declared (model, session, issue). It is not part of the
   changeset and never changes its id.
@@ -174,3 +180,5 @@ gets a new package (`gd.v2`), served beside `gd.v1` for at least a year.
 ### Changes
 
 - **1.0** (2026-10-22): first published.
+- **1.1** (2026-10-22): `Changesets.CreateMany`, a stream of changes with parents among them
+  (imports and git pushes without a round trip per change). [CS-6]

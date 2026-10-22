@@ -26,7 +26,7 @@ use grovedock_proto::{
     ResolveRequest, UnlockRequest,
 };
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Channel;
 
 /// A changeset as seen by the client: verified content plus server-derived data.
 #[derive(Debug, Clone)]
@@ -59,6 +59,35 @@ pub struct DirEntry {
     pub id: Option<Id>,
 }
 
+/// A parent of a change sent with [`Remote::create_changesets`]: an existing change, or one made
+/// earlier in the same call (by position from 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Parent {
+    Id(Id),
+    Earlier(usize),
+}
+
+/// Creates the changes one call at a time: what any remote can do.
+pub async fn create_one_by_one<R: Remote + ?Sized>(
+    remote: &R,
+    batch: Vec<(Vec<Parent>, Changeset)>,
+) -> Result<Vec<Id>> {
+    let mut made: Vec<Id> = Vec::with_capacity(batch.len());
+    for (parents, mut cs) in batch {
+        cs.parents = parents
+            .iter()
+            .map(|p| match *p {
+                Parent::Id(id) => Ok(id.0.to_vec()),
+                Parent::Earlier(n) => {
+                    made.get(n).map(|id| id.0.to_vec()).with_context(|| format!("no change {n} earlier"))
+                }
+            })
+            .collect::<Result<_>>()?;
+        made.push(remote.create_changeset(cs).await?.id);
+    }
+    Ok(made)
+}
+
 #[async_trait]
 pub trait Remote: Send + Sync {
     /// Object access; may point at a node daemon or regional cache instead of the server.
@@ -74,6 +103,11 @@ pub trait Remote: Send + Sync {
         _task: u64,
     ) -> Result<RemoteChangeset> {
         self.create_changeset(cs).await
+    }
+    /// Creates changes in order (`parents` is ignored on each; the list beside it is used).
+    /// A server that streams them takes a whole history in about one round trip.
+    async fn create_changesets(&self, batch: Vec<(Vec<Parent>, Changeset)>) -> Result<Vec<Id>> {
+        create_one_by_one(self, batch).await
     }
     async fn changeset(&self, rev: &str) -> Result<RemoteChangeset>;
     async fn get_ref(&self, name: &str) -> Result<Option<Id>>;
@@ -156,7 +190,7 @@ impl GrpcRemote {
         let token = crate::credentials::resolve(token, server);
         let token = token.as_deref();
         let (base, repo) = grovedock_proto::split_repo_url(server);
-        let channel = Endpoint::from_shared(base)
+        let channel = grovedock_proto::endpoint(base)
             .with_context(|| format!("bad server URL `{server}`"))?
             .tcp_nodelay(true)
             .http2_adaptive_window(true)
@@ -274,9 +308,50 @@ impl Remote for GrpcRemote {
             message: cs.message,
             timestamp_ms: cs.timestamp_ms,
             git: cs.git.map(|g| prost::Message::encode_to_vec(&g)).unwrap_or_default(),
+            parent_refs: vec![],
         };
         let mut c = ChangesetsClient::new(self.ch()).max_encoding_message_size(MAX_MESSAGE_BYTES);
         verify(c.create(req).await.map_err(st)?.into_inner())
+    }
+
+    async fn create_changesets(&self, batch: Vec<(Vec<Parent>, Changeset)>) -> Result<Vec<Id>> {
+        use grovedock_proto::{ParentRef, parent_ref};
+        let n = batch.len();
+        let reqs: Vec<CreateChangesetRequest> = batch
+            .iter()
+            .map(|(parents, cs)| CreateChangesetRequest {
+                parent_refs: parents
+                    .iter()
+                    .map(|p| ParentRef {
+                        parent: Some(match *p {
+                            Parent::Id(id) => parent_ref::Parent::Id(id.0.to_vec()),
+                            Parent::Earlier(i) => parent_ref::Parent::Earlier(i as u32),
+                        }),
+                    })
+                    .collect(),
+                changes: cs.changes.iter().cloned().map(wire_change).collect(),
+                author: cs.author.clone(),
+                message: cs.message.clone(),
+                timestamp_ms: cs.timestamp_ms,
+                git: cs.git.as_ref().map(prost::Message::encode_to_vec).unwrap_or_default(),
+                ..Default::default()
+            })
+            .collect();
+        let mut c = ChangesetsClient::new(self.ch()).max_encoding_message_size(MAX_MESSAGE_BYTES);
+        let mut answers = match c.create_many(futures::stream::iter(reqs)).await {
+            Ok(r) => r.into_inner(),
+            // A server from before CreateMany: one call per change.
+            Err(s) if s.code() == tonic::Code::Unimplemented => return create_one_by_one(self, batch).await,
+            Err(s) => return Err(st(s)),
+        };
+        let mut ids = Vec::with_capacity(n);
+        while let Some(a) = answers.message().await.map_err(st)? {
+            ids.push(Id::from_slice(&a.id)?);
+        }
+        if ids.len() != n {
+            bail!("the server made {} of {n} changes", ids.len());
+        }
+        Ok(ids)
     }
 
     async fn changeset(&self, rev: &str) -> Result<RemoteChangeset> {

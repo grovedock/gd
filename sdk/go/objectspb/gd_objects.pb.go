@@ -246,12 +246,15 @@ func (x *FileChange) GetMode() Mode {
 }
 
 type Changeset struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Parents       [][]byte               `protobuf:"bytes,1,rep,name=parents,proto3" json:"parents,omitempty"`
-	Changes       []*FileChange          `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
-	Author        string                 `protobuf:"bytes,3,opt,name=author,proto3" json:"author,omitempty"`
-	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
-	TimestampMs   int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Parents     [][]byte               `protobuf:"bytes,1,rep,name=parents,proto3" json:"parents,omitempty"`
+	Changes     []*FileChange          `protobuf:"bytes,2,rep,name=changes,proto3" json:"changes,omitempty"`
+	Author      string                 `protobuf:"bytes,3,opt,name=author,proto3" json:"author,omitempty"`
+	Message     string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	TimestampMs int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	// For a changeset that came from git: what git needs to make the very same commit again.
+	// Absent for changes made with gd (so their ids don't change); not kept when a land rebases.
+	Git           *GitOrigin `protobuf:"bytes,6,opt,name=git,proto3" json:"git,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -321,6 +324,172 @@ func (x *Changeset) GetTimestampMs() int64 {
 	return 0
 }
 
+func (x *Changeset) GetGit() *GitOrigin {
+	if x != nil {
+		return x.Git
+	}
+	return nil
+}
+
+// A git commit's identity beyond what a changeset holds, kept so that the git view of a
+// history (git over HTTPS, mirrors, exports) reproduces the original commit ids.
+type GitOrigin struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// As git wrote them: "Name <email> SECONDS +ZZZZ".
+	Author    string `protobuf:"bytes,1,opt,name=author,proto3" json:"author,omitempty"`
+	Committer string `protobuf:"bytes,2,opt,name=committer,proto3" json:"committer,omitempty"`
+	// The message's encoding when it isn't UTF-8 (then `message` holds its bytes).
+	Encoding string `protobuf:"bytes,3,opt,name=encoding,proto3" json:"encoding,omitempty"`
+	Message  []byte `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	// A signed commit's signature, verbatim, and its hash algorithm ("sha1").
+	SignatureAlgorithm string `protobuf:"bytes,5,opt,name=signature_algorithm,json=signatureAlgorithm,proto3" json:"signature_algorithm,omitempty"`
+	Signature          []byte `protobuf:"bytes,6,opt,name=signature,proto3" json:"signature,omitempty"`
+	// Submodule entries (gd keeps no submodules; git's trees do).
+	Gitlinks []*Gitlink `protobuf:"bytes,7,rep,name=gitlinks,proto3" json:"gitlinks,omitempty"`
+	// The commit id this must reproduce: checked when the git view is written, never trusted.
+	Commit        string `protobuf:"bytes,8,opt,name=commit,proto3" json:"commit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitOrigin) Reset() {
+	*x = GitOrigin{}
+	mi := &file_gd_objects_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitOrigin) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitOrigin) ProtoMessage() {}
+
+func (x *GitOrigin) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_objects_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitOrigin.ProtoReflect.Descriptor instead.
+func (*GitOrigin) Descriptor() ([]byte, []int) {
+	return file_gd_objects_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GitOrigin) GetAuthor() string {
+	if x != nil {
+		return x.Author
+	}
+	return ""
+}
+
+func (x *GitOrigin) GetCommitter() string {
+	if x != nil {
+		return x.Committer
+	}
+	return ""
+}
+
+func (x *GitOrigin) GetEncoding() string {
+	if x != nil {
+		return x.Encoding
+	}
+	return ""
+}
+
+func (x *GitOrigin) GetMessage() []byte {
+	if x != nil {
+		return x.Message
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetSignatureAlgorithm() string {
+	if x != nil {
+		return x.SignatureAlgorithm
+	}
+	return ""
+}
+
+func (x *GitOrigin) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetGitlinks() []*Gitlink {
+	if x != nil {
+		return x.Gitlinks
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetCommit() string {
+	if x != nil {
+		return x.Commit
+	}
+	return ""
+}
+
+type Gitlink struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Commit        string                 `protobuf:"bytes,2,opt,name=commit,proto3" json:"commit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Gitlink) Reset() {
+	*x = Gitlink{}
+	mi := &file_gd_objects_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Gitlink) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Gitlink) ProtoMessage() {}
+
+func (x *Gitlink) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_objects_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Gitlink.ProtoReflect.Descriptor instead.
+func (*Gitlink) Descriptor() ([]byte, []int) {
+	return file_gd_objects_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *Gitlink) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *Gitlink) GetCommit() string {
+	if x != nil {
+		return x.Commit
+	}
+	return ""
+}
+
 type ChunkRef struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            []byte                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -331,7 +500,7 @@ type ChunkRef struct {
 
 func (x *ChunkRef) Reset() {
 	*x = ChunkRef{}
-	mi := &file_gd_objects_proto_msgTypes[4]
+	mi := &file_gd_objects_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -343,7 +512,7 @@ func (x *ChunkRef) String() string {
 func (*ChunkRef) ProtoMessage() {}
 
 func (x *ChunkRef) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_objects_proto_msgTypes[4]
+	mi := &file_gd_objects_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -356,7 +525,7 @@ func (x *ChunkRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChunkRef.ProtoReflect.Descriptor instead.
 func (*ChunkRef) Descriptor() ([]byte, []int) {
-	return file_gd_objects_proto_rawDescGZIP(), []int{4}
+	return file_gd_objects_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ChunkRef) GetId() []byte {
@@ -384,7 +553,7 @@ type Manifest struct {
 
 func (x *Manifest) Reset() {
 	*x = Manifest{}
-	mi := &file_gd_objects_proto_msgTypes[5]
+	mi := &file_gd_objects_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -396,7 +565,7 @@ func (x *Manifest) String() string {
 func (*Manifest) ProtoMessage() {}
 
 func (x *Manifest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_objects_proto_msgTypes[5]
+	mi := &file_gd_objects_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -409,7 +578,7 @@ func (x *Manifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Manifest.ProtoReflect.Descriptor instead.
 func (*Manifest) Descriptor() ([]byte, []int) {
-	return file_gd_objects_proto_rawDescGZIP(), []int{5}
+	return file_gd_objects_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Manifest) GetSize() uint64 {
@@ -441,13 +610,26 @@ const file_gd_objects_proto_rawDesc = "" +
 	"FileChange\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
 	"\x04blob\x18\x02 \x01(\fR\x04blob\x12'\n" +
-	"\x04mode\x18\x03 \x01(\x0e2\x13.gd.objects.v1.ModeR\x04mode\"\xaf\x01\n" +
+	"\x04mode\x18\x03 \x01(\x0e2\x13.gd.objects.v1.ModeR\x04mode\"\xdb\x01\n" +
 	"\tChangeset\x12\x18\n" +
 	"\aparents\x18\x01 \x03(\fR\aparents\x123\n" +
 	"\achanges\x18\x02 \x03(\v2\x19.gd.objects.v1.FileChangeR\achanges\x12\x16\n" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12!\n" +
-	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\",\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\x12*\n" +
+	"\x03git\x18\x06 \x01(\v2\x18.gd.objects.v1.GitOriginR\x03git\"\x92\x02\n" +
+	"\tGitOrigin\x12\x16\n" +
+	"\x06author\x18\x01 \x01(\tR\x06author\x12\x1c\n" +
+	"\tcommitter\x18\x02 \x01(\tR\tcommitter\x12\x1a\n" +
+	"\bencoding\x18\x03 \x01(\tR\bencoding\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\fR\amessage\x12/\n" +
+	"\x13signature_algorithm\x18\x05 \x01(\tR\x12signatureAlgorithm\x12\x1c\n" +
+	"\tsignature\x18\x06 \x01(\fR\tsignature\x122\n" +
+	"\bgitlinks\x18\a \x03(\v2\x16.gd.objects.v1.GitlinkR\bgitlinks\x12\x16\n" +
+	"\x06commit\x18\b \x01(\tR\x06commit\"5\n" +
+	"\aGitlink\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
+	"\x06commit\x18\x02 \x01(\tR\x06commit\",\n" +
 	"\bChunkRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12\x10\n" +
 	"\x03len\x18\x02 \x01(\x04R\x03len\"O\n" +
@@ -473,27 +655,31 @@ func file_gd_objects_proto_rawDescGZIP() []byte {
 }
 
 var file_gd_objects_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_gd_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_gd_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_gd_objects_proto_goTypes = []any{
 	(Mode)(0),          // 0: gd.objects.v1.Mode
 	(*TreeEntry)(nil),  // 1: gd.objects.v1.TreeEntry
 	(*Tree)(nil),       // 2: gd.objects.v1.Tree
 	(*FileChange)(nil), // 3: gd.objects.v1.FileChange
 	(*Changeset)(nil),  // 4: gd.objects.v1.Changeset
-	(*ChunkRef)(nil),   // 5: gd.objects.v1.ChunkRef
-	(*Manifest)(nil),   // 6: gd.objects.v1.Manifest
+	(*GitOrigin)(nil),  // 5: gd.objects.v1.GitOrigin
+	(*Gitlink)(nil),    // 6: gd.objects.v1.Gitlink
+	(*ChunkRef)(nil),   // 7: gd.objects.v1.ChunkRef
+	(*Manifest)(nil),   // 8: gd.objects.v1.Manifest
 }
 var file_gd_objects_proto_depIdxs = []int32{
 	0, // 0: gd.objects.v1.TreeEntry.mode:type_name -> gd.objects.v1.Mode
 	1, // 1: gd.objects.v1.Tree.entries:type_name -> gd.objects.v1.TreeEntry
 	0, // 2: gd.objects.v1.FileChange.mode:type_name -> gd.objects.v1.Mode
 	3, // 3: gd.objects.v1.Changeset.changes:type_name -> gd.objects.v1.FileChange
-	5, // 4: gd.objects.v1.Manifest.chunks:type_name -> gd.objects.v1.ChunkRef
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	5, // 4: gd.objects.v1.Changeset.git:type_name -> gd.objects.v1.GitOrigin
+	6, // 5: gd.objects.v1.GitOrigin.gitlinks:type_name -> gd.objects.v1.Gitlink
+	7, // 6: gd.objects.v1.Manifest.chunks:type_name -> gd.objects.v1.ChunkRef
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_gd_objects_proto_init() }
@@ -507,7 +693,7 @@ func file_gd_objects_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gd_objects_proto_rawDesc), len(file_gd_objects_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

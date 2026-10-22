@@ -14,7 +14,7 @@ use grovedock_core::{Error, Id, Result};
 use grovedock_proto::objects_client::ObjectsClient;
 use grovedock_proto::{BearerAuth, IdList, MAX_MESSAGE_BYTES, OBJECT_BATCH, ObjectPayload};
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::{Channel, Endpoint};
+use tonic::transport::Channel;
 
 use crate::storage_err;
 
@@ -41,7 +41,7 @@ impl GrpcObjects {
     /// `url` may end in `/OWNER/NAME` to name a repository on a server that hosts many.
     pub fn connect(url: &str, token: Option<&str>) -> Result<Self> {
         let (base, repo) = grovedock_proto::split_repo_url(url);
-        let channel = Endpoint::from_shared(base)
+        let channel = grovedock_proto::endpoint(base)
             .map_err(storage_err)?
             .tcp_nodelay(true)
             .http2_adaptive_window(true)

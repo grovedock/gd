@@ -9,7 +9,7 @@ use grovedock_core::Id;
 use grovedock_core::flags::FeatureFlags;
 use grovedock_core::object::{CHANGESET_TAG, Changeset, FileChange, Kind, Mode, decode_object, encode_object};
 
-use crate::remote::{Remote, RemoteChangeset};
+use crate::remote::{Parent, Remote, RemoteChangeset};
 
 /// One requirement's result.
 pub struct Outcome {
@@ -158,6 +158,28 @@ pub async fn run(r: &dyn Remote, flags: &dyn FeatureFlags, git_dir_root: Option<
     check!(out, "CS-5", "a changeset whose parent the server doesn't have is refused", {
         let ghost = Id::hash(CHANGESET_TAG, c.run.as_bytes());
         ensure!(c.change(Some(ghost), &[("a", "a")], "Orphan").await.is_err(), "it was accepted");
+        Ok(())
+    });
+
+    check!(out, "CS-6", "changes sent together, parents among them, get the ids they'd get one by one", {
+        let mut batch = Vec::new();
+        for (i, parent) in [Parent::Id(first.id), Parent::Earlier(0), Parent::Earlier(1)].into_iter().enumerate() {
+            let blob = c.blob(&format!("batch {i}\n")).await?;
+            let cs = Changeset {
+                parents: vec![],
+                changes: vec![FileChange::upsert(format!("batch/{i}.txt"), Mode::File, blob)],
+                author: "conformance".into(),
+                message: format!("Batch {i}"),
+                timestamp_ms: 1_700_000_000_000,
+                git: None,
+            };
+            batch.push((vec![parent], cs));
+        }
+        let together = c.r.create_changesets(batch.clone()).await?;
+        let alone = crate::remote::create_one_by_one(c.r, batch).await?;
+        ensure!(together == alone, "{together:?} together, {alone:?} one by one");
+        let last = c.r.changeset(&together[2].to_hex()).await?;
+        ensure!(last.changeset.parents == vec![together[1].0.to_vec()], "the third change's parent isn't the second");
         Ok(())
     });
 
