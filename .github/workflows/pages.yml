@@ -1,9 +1,8 @@
 name: Pages
 
+# By hand only, for now: grovedock.com is still served from the repository it started in, and
+# this would claim its domain. Back to on-push when the website moves here.
 on:
-  push:
-    branches: [main]
-    paths: ["site/**", "docs/**", "console/**", "scripts/build-site.sh", ".github/workflows/pages.yml"]
   workflow_dispatch:
 
 permissions:

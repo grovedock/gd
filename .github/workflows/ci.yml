@@ -99,13 +99,16 @@ jobs:
         with: { repo-token: "${{ secrets.GITHUB_TOKEN }}" }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Start SeaweedFS (S3 API)
+        # SeaweedFS refuses anonymous writes and bucket names under 3 characters: an identity
+        # for the test's keys, and the bucket made through its own shell.
         run: |
-          docker run -d --name s3 -p 8333:8333 chrislusf/seaweedfs:4.48 server -s3
+          printf '%s' '{"identities":[{"name":"gd","credentials":[{"accessKey":"gd","secretKey":"gd-secret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > "$RUNNER_TEMP/s3.json"
+          docker run -d --name s3 -p 8333:8333 -v "$RUNNER_TEMP/s3.json:/etc/s3.json:ro" chrislusf/seaweedfs:4.48 server -s3 -s3.config=/etc/s3.json
           for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:8333/ && break; sleep 1; done
-          curl -sf -X PUT http://localhost:8333/gd
+          for i in $(seq 1 20); do docker exec s3 sh -c "echo 's3.bucket.create -name gd-ci' | weed shell" | grep -q "created bucket" && break; sleep 2; done
       - name: S3 contract
         env:
-          GD_TEST_S3_URL: s3://gd/ci
+          GD_TEST_S3_URL: s3://gd-ci/ci
           AWS_ACCESS_KEY_ID: gd
           AWS_SECRET_ACCESS_KEY: gd-secret
           AWS_REGION: us-east-1
