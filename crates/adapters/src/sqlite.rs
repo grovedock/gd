@@ -62,13 +62,21 @@ fn tune(c: &Connection) -> rusqlite::Result<()> {
     c.pragma_update(None, "synchronous", sync)?;
     // No mmap: SQLite remaps the file on every read transaction after the file grows, which
     // dominated reads under concurrent writes (measured: compaction 1.4-2x faster without
-    // it, clones unchanged). ponytail: 64 MB page cache per connection, so at most ~1.1 GB
-    // across 16 readers and the writer on a busy, large store; make it configurable if
-    // small hosts need less.
-    c.execute_batch(
+    // it, clones unchanged).
+    c.execute_batch(&format!(
         "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
-         PRAGMA cache_size=-65536; PRAGMA mmap_size=0; PRAGMA temp_store=MEMORY;",
-    )
+         PRAGMA cache_size=-{}; PRAGMA mmap_size=0; PRAGMA temp_store=MEMORY;",
+        page_cache_kib()
+    ))
+}
+
+/// Each connection's page cache: `GD_SQLITE_CACHE_MB`, else 16 MiB. Every open repository has
+/// a writer and up to 16 readers, outside the server's shared cache budget, which already
+/// holds the hot objects; the OS file cache backs the rest. (At 64 MiB a server on a 1 GB
+/// host went into swap importing one large repository.)
+fn page_cache_kib() -> u64 {
+    std::env::var("GD_SQLITE_CACHE_MB").ok().and_then(|v| v.trim().parse::<u64>().ok()).unwrap_or(16).clamp(2, 1024)
+        * 1024
 }
 
 fn id_of(b: Vec<u8>) -> rusqlite::Result<Id> {

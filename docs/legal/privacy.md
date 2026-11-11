@@ -1,9 +1,9 @@
 # Grovedock Privacy Policy
 
 **Effective date:** 19 October 2026
-**Last updated:** 19 October 2026
+**Last updated:** 12 November 2026
 
-This policy explains what personal data **Kabir Narang** (trading as "Grovedock", "we", "us"), a sole proprietorship at [REGISTERED ADDRESS], India, collects through Grovedock and our website https://grovedock.com, why, how long we keep it, who we share it with, and what rights you have.
+This policy explains what personal data **Kabir Narang** (trading as "Grovedock", "we", "us"), a sole proprietorship in Karnal, Haryana, India, collects through Grovedock and our website https://grovedock.com, why, how long we keep it, who we share it with, and what rights you have.
 
 We wrote it to meet India's **Digital Personal Data Protection Act, 2023** ("DPDP Act") and **DPDP Rules, 2025**, and the **Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011** that still apply until the DPDP Act fully takes effect.
 
@@ -141,7 +141,7 @@ Grovedock is for people aged **18 and over**. Under Indian law a "child" is anyo
 Name: Kabir Narang
 Designation: Grievance Officer
 Email: grievance@grovedock.com
-Address: [REGISTERED ADDRESS]
+Location: Karnal, Haryana, India
 Hours: Mon–Fri, 10:00–18:00 IST
 
 If you are not satisfied with our response, you may complain to the **Data Protection Board of India** once its complaint process is available to you.

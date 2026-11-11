@@ -19,6 +19,10 @@ pub enum Error {
     Disabled(&'static str),
     #[error("storage: {0}")]
     Storage(#[from] anyhow::Error),
+    /// What another server answered (signed out, busy, unreachable), worded for the person
+    /// reading it: no codes, no transport details.
+    #[error("{0}")]
+    Remote(String),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;

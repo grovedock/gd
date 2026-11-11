@@ -1,9 +1,11 @@
 # Runs (CI)
 
 Runs tests every change with the workflow files a repository already has. A repository moved from
-GitHub keeps its `.github/workflows/*.yml`; nothing needs rewriting. New workflows can live in
+GitHub keeps its `.github/workflows/*.yml`; nothing needs rewriting. Workflows can also live in
 `.grovedock/workflows/`, and use Grovedock's own words (`on: change_request` for pull requests,
-`on: manual` for `workflow_dispatch`).
+`on: manual` for `workflow_dispatch`). Once a repository has `.grovedock/workflows/`, Runs reads
+only that folder: a repository kept on GitHub too runs `.github/workflows/` there and
+`.grovedock/workflows/` here, each on its own host.
 
 A run is green or red on the change request, and **Land when ready** waits for it.
 
@@ -17,7 +19,7 @@ A run is green or red on the change request, and **Land when ready** waits for i
 Connect one (an owner's administrator):
 
 ```sh
-brew install kabirnarang39/tap/gd
+brew install kabirnarang39/tap/grovedock
 gd runner register --server https://cloud.grovedock.com --owner acme
 gd runner start --containers          # each job in a fresh Linux container (needs Docker)
 ```
@@ -33,6 +35,19 @@ gd runner labels --owner acme RUNNER_ID --label gpu --label large
 
 Code from forks runs only after a maintainer approves the run, never with secrets, and only on
 runners registered with `--outsiders` (or hosted runners).
+
+## Grovedock's own names
+
+A workflow written for Grovedock needn't name GitHub. Each name below works beside the one
+imported workflows use:
+
+| Grovedock | Also accepted |
+|---|---|
+| `on: change_request`, `on: manual` | `pull_request`, `workflow_dispatch` |
+| `${{ grovedock.sha }}`, `grovedock.ref`, `grovedock.event_name` (`change_request`)… | `${{ github.… }}` (`event_name` is `pull_request`) |
+| `$GROVEDOCK_OUTPUT`, `$GROVEDOCK_ENV`, `$GROVEDOCK_PATH`, `$GROVEDOCK_STEP_SUMMARY`, `$GROVEDOCK_SHA`… | `$GITHUB_…` |
+| `uses: grovedock/checkout`, `grovedock/upload-artifact`, `grovedock/download-artifact`, `grovedock/cache`, `grovedock/release` | `actions/checkout`… |
+| `${{ grovedock.token }}`, `secrets.GROVEDOCK_TOKEN`: the job's token, read-only for the repository, gone when the job ends | none: `github.token` stays empty, because actions send it to GitHub's API |
 
 ## What a workflow can use
 

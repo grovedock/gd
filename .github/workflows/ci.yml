@@ -59,6 +59,13 @@ jobs:
           sudo apt-get install -y -qq fuse3
           echo "GD_FUSE_TEST=1" >> "$GITHUB_ENV"
       - run: cargo test --workspace --locked
+      # Real TLS end to end on every OS: gd reaches the live server over https and gets its refusal.
+      - name: gd over https
+        shell: bash
+        run: |
+          out=$(cargo run -q --locked --bin gd -- whoami https://cloud.grovedock.com 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q "missing bearer token"
 
   databases:
     # Same contract suite against real Postgres and CockroachDB (Postgres wire protocol).

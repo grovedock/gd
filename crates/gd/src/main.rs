@@ -63,6 +63,10 @@ enum Cmd {
         /// Accepted for git muscle memory; Grovedock always commits all changes (or PATHS).
         #[arg(short = 'a', long = "all", hide = true)]
         _all: bool,
+        /// Land it straight after, in the same process and connection (one round trip less
+        /// for agents than `gd commit` then `gd land`).
+        #[arg(long)]
+        land: bool,
         paths: Vec<String>,
     },
     /// Land the committed work on the ref (server-side rebase + atomic ref update). Several
@@ -242,7 +246,8 @@ enum Cmd {
         #[arg(long = "allowed-origin")]
         allowed_origins: Vec<String>,
     },
-    /// Sign in to a server from the browser; the token is saved in ~/.config/gd/credentials.json.
+    /// Sign in to a server from the browser; the token is saved in the system keychain (macOS,
+    /// Windows) or ~/.config/gd/credentials.json.
     Login {
         /// The server, e.g. https://gd.example.com; default $GD_SERVER or the workspace's.
         server: Option<String>,
@@ -251,6 +256,11 @@ enum Cmd {
     Logout { server: Option<String> },
     /// Show who you are signed in as.
     Whoami { server: Option<String> },
+    /// Tokens for scripts: `gd auth token` prints the one gd would use for a server.
+    Auth {
+        #[command(subcommand)]
+        action: AuthAction,
+    },
     /// Create and list repositories on a server that hosts many (`grovedockd server --platform`).
     Repo {
         #[command(subcommand)]
@@ -417,6 +427,12 @@ enum Cmd {
 }
 
 #[derive(Subcommand)]
+enum AuthAction {
+    /// Print the token for a server (`--token`, `GD_TOKEN`, else the saved one), like `gh auth token`.
+    Token { server: Option<String> },
+}
+
+#[derive(Subcommand)]
 enum RepoCmd {
     /// Create OWNER/NAME. Then: `gd clone SERVER/OWNER/NAME`.
     Create {
@@ -506,7 +522,9 @@ fn server_for(explicit: Option<String>) -> Result<String> {
 }
 
 /// A bare $GD_SERVER naming the workspace's own server keeps the workspace's repository
-/// (`SERVER/OWNER/NAME`), so `gd protect` or `gd cr` in a clone need no `--server`.
+/// (`SERVER/OWNER/NAME`), so `gd protect` or `gd cr` in a clone need no `--server`. Inside a
+/// workspace of another server, the workspace's server wins: $GD_SERVER is a default (a CI job
+/// gets one for its own repository), and its token isn't the workspace's.
 fn pick_server(explicit: Option<String>, env: Option<String>, ws: impl FnOnce() -> Option<String>) -> Option<String> {
     use grovedock_proto::split_repo_url;
     if explicit.is_some() {
@@ -515,6 +533,7 @@ fn pick_server(explicit: Option<String>, env: Option<String>, ws: impl FnOnce() 
     let Some(env) = env else { return ws() };
     match (split_repo_url(&env), ws()) {
         ((base, None), Some(ws)) if split_repo_url(&ws).0 == base => Some(ws),
+        ((base, _), Some(ws)) if split_repo_url(&ws).0 != base => Some(ws),
         _ => Some(env),
     }
 }
@@ -582,7 +601,9 @@ async fn run() -> Result<()> {
             let config = Config { server, objects, ref_name, sparse: paths };
             let ws = clone::run(remote.as_ref(), &flags, &dir, config).await?;
             match ws.base {
-                Some(b) => println!("checked out {} files at {} into {}", ws.index.len(), b.short(), dir.display()),
+                Some(b) => {
+                    println!("checked out {} at {} into {}", gd::files(ws.index.len() as u64), b.short(), dir.display())
+                }
                 None => println!("cloned empty ref into {}", dir.display()),
             }
         }
@@ -601,54 +622,48 @@ async fn run() -> Result<()> {
                 writeln!(stdout, "clean (base {})", ws.base.map_or("none".into(), |b| b.short()))?;
             }
         }
-        Cmd::Commit { message, paths, .. } => {
+        Cmd::Commit { message, paths, land, .. } => {
             let mut ws = workspace()?;
             let remote = ws_remote(&ws, token)?;
+            // An agent's usual edit: committed and landed in one round trip when it can be.
+            if land
+                && let Some((c, out)) =
+                    commit::run_and_land(remote.as_ref(), &mut ws, &message, &gd::default_author(), &paths).await?
+            {
+                println!("committed {} ({}, {} objects sent)", c.id.short(), gd::files(c.files as u64), c.uploaded);
+                report_landed(&out, &ws.config.ref_name);
+                return Ok(());
+            }
             match commit::run(remote.as_ref(), &mut ws, &message, &gd::default_author(), &paths).await? {
+                Some(c) if land => {
+                    println!("committed {} ({}, {} objects sent)", c.id.short(), gd::files(c.files as u64), c.uploaded)
+                }
                 Some(c) => println!(
-                    "committed {} ({} files, {} new objects uploaded); run `gd land` to land on {}",
+                    "committed {} ({} files, {} objects sent); run `gd land` to land on {}",
                     c.id.short(),
                     c.files,
                     c.uploaded,
                     ws.config.ref_name
                 ),
-                None => println!("nothing to commit"),
+                None => {
+                    println!("nothing to commit");
+                    return Ok(());
+                }
+            }
+            if land {
+                land_and_report(remote.as_ref(), &mut ws, false, token).await?;
             }
         }
         Cmd::Land { squash } => {
             let mut ws = workspace()?;
             let remote = ws_remote(&ws, token)?;
-            let out = match land::run_with(remote.as_ref(), &mut ws, squash).await {
-                Ok(out) => out,
-                // A protected branch takes changes through review: propose this one instead.
-                Err(e) if format!("{e:#}").contains("is protected") && ws.base.is_some() => {
-                    let target = review_target(Some(ws.config.server.clone()), token).map_err(|_| e)?;
-                    let (number, branch) = cr::propose(target, remote.as_ref(), &ws).await?;
-                    println!(
-                        "{} is protected, so this went for review: change request #{number} from {branch}.\n\
-                         It lands once approved and its checks pass: gd cr view {number}",
-                        ws.config.ref_name
-                    );
-                    return Ok(());
-                }
-                Err(e) => return Err(e),
-            };
-            println!(
-                "landed {}{} on {}{}",
-                if out.commits > 1 { format!("{} commits, ending at ", out.commits) } else { String::new() },
-                out.landed.short(),
-                ws.config.ref_name,
-                if out.rebased { format!(" (rebased; {} incoming files synced)", out.synced) } else { String::new() }
-            );
-            if let Some(why) = out.behind {
-                eprintln!("warning: working copy not updated: {why}");
-            }
+            land_and_report(remote.as_ref(), &mut ws, squash, token).await?;
         }
         Cmd::Sync { rev } => {
             let mut ws = workspace()?;
             let remote = ws_remote(&ws, token)?;
             let out = sync::run(remote.as_ref(), &mut ws, rev.as_deref()).await?;
-            println!("at {} ({} files changed)", out.to.short(), out.changed);
+            println!("at {} ({} changed)", out.to.short(), gd::files(out.changed as u64));
         }
         Cmd::Checkout { target, create } => {
             let mut ws = workspace()?;
@@ -658,7 +673,7 @@ async fn run() -> Result<()> {
                 println!("created ref {target} at {}", ws.base.map_or("none".into(), |b| b.short()));
             } else {
                 let out = sync::checkout(remote.as_ref(), &mut ws, &target).await?;
-                println!("at {} ({} files changed)", out.to.short(), out.changed);
+                println!("at {} ({} changed)", out.to.short(), gd::files(out.changed as u64));
             }
         }
         Cmd::Log { path, rev, limit, oneline, agent, model } => {
@@ -960,8 +975,13 @@ async fn run() -> Result<()> {
             let started = std::time::Instant::now();
             let out = git::import(remote.as_ref(), &flags, &git_dir, &git_ref, &ref_name, force).await?;
             println!(
-                "imported {} commits, {} blobs ({} uploaded) in {:.1}s; {ref_name} -> {}{}",
+                "imported {} commits{}, {} blobs ({} uploaded) in {:.1}s; {ref_name} -> {}{}",
                 out.commits,
+                if out.resumed > 0 {
+                    format!(" (plus {} from the interrupted run)", out.resumed)
+                } else {
+                    String::new()
+                },
                 out.blobs,
                 out.uploaded,
                 started.elapsed().as_secs_f64(),
@@ -1051,6 +1071,13 @@ async fn run() -> Result<()> {
         Cmd::Login { server } => login::login(&server_for(server)?).await?,
         Cmd::Logout { server } => login::logout(&server_for(server)?).await?,
         Cmd::Whoami { server } => login::whoami(&server_for(server)?, token).await?,
+        Cmd::Auth { action: AuthAction::Token { server } } => {
+            let server = server_for(server)?;
+            match gd::credentials::resolve(token, &server) {
+                Some(t) => println!("{t}"),
+                None => anyhow::bail!("not signed in to {}; run `gd login`", gd::credentials::key(&server)),
+            }
+        }
         Cmd::Org { server, action } => admin::org(platform_client(server, token)?, action).await?,
         Cmd::Team { server, action } => admin::team(platform_client(server, token)?, action).await?,
         Cmd::Cr { server, action } => cr::cr(review_target(server, token)?, action).await?,
@@ -1183,6 +1210,44 @@ async fn run() -> Result<()> {
     Ok(())
 }
 
+/// `gd land`: land the committed work, or propose it for review when the ref is protected.
+async fn land_and_report(
+    remote: &dyn gd::remote::Remote,
+    ws: &mut gd::workspace::Workspace,
+    squash: bool,
+    token: Option<&str>,
+) -> anyhow::Result<()> {
+    let out = match land::run_with(remote, ws, squash).await {
+        Ok(out) => out,
+        // A protected branch takes changes through review: propose this one instead.
+        Err(e) if format!("{e:#}").contains("is protected") && ws.base.is_some() => {
+            let target = review_target(Some(ws.config.server.clone()), token).map_err(|_| e)?;
+            let (number, branch) = cr::propose(target, remote, ws).await?;
+            println!(
+                "{} is protected, so this went for review: change request #{number} from {branch}.\n\
+                 It lands once approved and its checks pass: gd cr view {number}",
+                ws.config.ref_name
+            );
+            return Ok(());
+        }
+        Err(e) => return Err(e),
+    };
+    report_landed(&out, &ws.config.ref_name);
+    Ok(())
+}
+
+fn report_landed(out: &land::LandOutcome, ref_name: &str) {
+    println!(
+        "landed {}{} on {ref_name}{}",
+        if out.commits > 1 { format!("{} commits, ending at ", out.commits) } else { String::new() },
+        out.landed.short(),
+        if out.rebased { format!(" (rebased; {} incoming files synced)", out.synced) } else { String::new() }
+    );
+    if let Some(why) = &out.behind {
+        eprintln!("warning: working copy not updated: {why}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::pick_server;
@@ -1196,7 +1261,9 @@ mod tests {
         assert_eq!(pick(None, Some("https://p.example.com/")), "https://p.example.com/lumen/fleet");
         assert_eq!(pick(None, None), "https://p.example.com/lumen/fleet");
         assert_eq!(pick(None, Some("https://p.example.com/acme/web")), "https://p.example.com/acme/web");
-        assert_eq!(pick(None, Some("https://other.example.com")), "https://other.example.com");
+        // Another server's address doesn't send this workspace's commands there.
+        assert_eq!(pick(None, Some("https://other.example.com")), "https://p.example.com/lumen/fleet");
+        assert_eq!(pick(None, Some("https://other.example.com/acme/web")), "https://p.example.com/lumen/fleet");
         assert_eq!(pick(Some("https://p.example.com"), Some("https://x")), "https://p.example.com");
     }
 }

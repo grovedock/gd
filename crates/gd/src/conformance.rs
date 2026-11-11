@@ -264,6 +264,30 @@ pub async fn run(r: &dyn Remote, flags: &dyn FeatureFlags, git_dir_root: Option<
         Ok(())
     });
 
+    check!(out, "LAND-6", "a land that brings its objects and change lands it as the three calls would", {
+        let head = c.r.get_ref(&main).await?.context("no main")?;
+        let (blob, payload) = encode_object(Kind::Blob, format!("one call {}\n", c.run).as_bytes());
+        let cs = Changeset {
+            parents: vec![head.0.to_vec()],
+            changes: vec![FileChange::upsert("one-call.txt", Mode::File, blob)],
+            author: "conformance".into(),
+            message: "One call".into(),
+            timestamp_ms: 1_700_000_000_000,
+            git: None,
+        };
+        let (created, landed, rebased) =
+            c.r.create_and_land(&main, vec![(blob, payload)], cs.clone())
+                .await?
+                .context("the server doesn't take a change with the land (protocol 1.2)")?;
+        ensure!(landed == created && !rebased, "landed as {landed}, made {created} (rebased: {rebased})");
+        // The same change made with Create gets the same id: nothing about it differs.
+        let alone = c.r.create_changeset(cs).await?.id;
+        ensure!(alone == created, "Create made {alone}, the land made {created}");
+        let (_, text) = c.r.read_file(&main, "one-call.txt").await?;
+        ensure!(text == format!("one call {}\n", c.run).as_bytes(), "the file isn't on the branch");
+        Ok(())
+    });
+
     // History and reading
     check!(out, "HIST-1", "Log follows first parents, newest first, filtered by path", {
         let all = c.r.log(&main, "", 1000).await?;

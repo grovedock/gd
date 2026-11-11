@@ -93,7 +93,7 @@ fn explain(s: tonic::Status) -> anyhow::Error {
     if s.code() == tonic::Code::Unimplemented {
         anyhow!("this server has no releases; they come with `grovedockd server --platform`")
     } else {
-        anyhow!("{}", s.message())
+        anyhow!(grovedock_adapters::grpc::words(&s))
     }
 }
 

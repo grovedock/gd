@@ -59,6 +59,23 @@ message GitOrigin {
   repeated Gitlink gitlinks = 7;
   // The commit id this must reproduce: checked when the git view is written, never trusted.
   string commit = 8;
+  // Entries the commit's tree spells with a mode git no longer writes (100664 from git's first
+  // months, a zero-padded 040000): the path and the mode as written, so the same tree, and the
+  // same commit id, come back. Empty for nearly every commit.
+  repeated GitMode modes = 9;
+  // The author and committer lines' bytes when they aren't UTF-8 (Latin-1 names in old
+  // commits); `author` and `committer` then hold them made readable.
+  bytes author_bytes = 10;
+  bytes committer_bytes = 11;
+  // The commit's header lines after `committer`, exactly as written, when it has any that a
+  // git import can't carry (`mergetag` from merging a signed tag, `change-id`): written back
+  // verbatim. Empty for nearly every commit.
+  bytes headers = 12;
+}
+
+message GitMode {
+  string path = 1;
+  string mode = 2;
 }
 
 message Gitlink {

@@ -122,6 +122,14 @@ branch has moved since the changeset's base. There is no merge queue and no lock
   instead of applying it twice. **[LAND-5]**
 - With `fast_forward`, the ref moves to the changeset as it is only if the ref's head is its
   ancestor; nothing is rebased (how `git push` works).
+- Since 1.2, a land may bring its change: `objects` and `create` instead of `changeset`. The
+  server stores the objects and makes the change exactly as `Objects.Put` and
+  `Changesets.Create` would (same checks, same id), lands it as above, and returns its id in
+  `created`. An agent's edit then takes one round trip instead of three. At most 1,024 objects
+  and 4 MiB; larger changes use the separate calls. **[LAND-6]** A server before 1.2 refuses
+  the empty `changeset` (`INVALID_ARGUMENT`) without doing anything, so a client then makes
+  the three calls. Sending the same request again after a lost reply is safe: it makes the
+  same change, which LAND-5 doesn't apply twice.
 
 ## 6. History and reading
 
@@ -182,3 +190,5 @@ gets a new package (`gd.v2`), served beside `gd.v1` for at least a year.
 - **1.0** (2026-10-22): first published.
 - **1.1** (2026-10-22): `Changesets.CreateMany`, a stream of changes with parents among them
   (imports and git pushes without a round trip per change). [CS-6]
+- **1.2** (2026-10-22): `Land.Land` takes the change's objects and the change itself, so an
+  agent's edit is one round trip. [LAND-6]

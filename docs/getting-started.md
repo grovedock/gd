@@ -11,7 +11,7 @@ organisation, for example `acme`.
 ## 2. Install gd
 
 ```sh
-brew install kabirnarang39/tap/gd
+brew install kabirnarang39/tap/grovedock
 ```
 
 Other ways:
@@ -21,7 +21,7 @@ Other ways:
 curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
 
 # From source
-cargo install grovedock
+cargo install --locked --git https://github.com/grovedock/gd grovedock
 ```
 
 Windows: download the `.zip` from the [releases page](https://github.com/grovedock/gd/releases).
@@ -45,6 +45,8 @@ gd import-git ~/code/my-repo --server https://cloud.grovedock.com/acme/web
 ```
 
 Import is deterministic and incremental: run it again later and it uploads only new commits.
+It shows how far it is and about how long is left. If it stops partway (a dropped connection, a
+closed laptop), run the same command again: it carries on from the last batch the server has.
 `gd export-git` goes the other way, with the same commits, and `gd mirror` keeps a git host such
 as GitHub or Bitbucket up to date continuously.
 

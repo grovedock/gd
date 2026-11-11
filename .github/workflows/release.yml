@@ -91,6 +91,31 @@ jobs:
           body_path: notes.md
           files: dist/*
 
+  # What a new user does, on clean machines: install with install.sh, then reach the hosted
+  # server over https. "missing bearer token" comes from the server, so seeing it proves the
+  # download, the binary and TLS all work (until 4.0.2 the CLI couldn't speak https at all).
+  install-check:
+    needs: publish
+    if: github.event_name == 'push'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Install with install.sh
+        run: |
+          GD_VERSION="${{ github.ref_name }}" GD_INSTALL="$HOME/gd-bin" sh install.sh
+          echo "$HOME/gd-bin" >> "$GITHUB_PATH"
+      - name: Reach cloud.grovedock.com over https
+        run: |
+          gd --version
+          out=$(gd whoami https://cloud.grovedock.com 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q "missing bearer token"
+
   # Packages the published Linux binaries; no emulated compilation, so it takes a minute.
   crates:
     needs: publish

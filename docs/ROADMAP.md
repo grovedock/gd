@@ -20,7 +20,7 @@ once; onboarding from plan to first agent; activity for every land.
 
 | Item | Product | Why |
 |---|---|---|
-| Credentials in the OS keychain | gd | `gd login` saves to macOS Keychain, Windows Credential Manager or the Secret Service, falling back to the 0600 file; `gd auth token` prints it for scripts (like git's credential helpers and `gh auth token`) |
+| ~~Credentials in the OS keychain~~ | gd | done in 4.0.5 (macOS, Windows) |
 | Explore, profiles, stars and forks | Grovedock | public repositories and communities, for open-source projects as much as companies |
 | Code search across repositories | Grovedock | find anything without a checkout |
 | Email notifications | Grovedock | review requested, assigned, mentioned, with per-person settings |

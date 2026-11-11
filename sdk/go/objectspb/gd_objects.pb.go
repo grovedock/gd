@@ -347,7 +347,19 @@ type GitOrigin struct {
 	// Submodule entries (gd keeps no submodules; git's trees do).
 	Gitlinks []*Gitlink `protobuf:"bytes,7,rep,name=gitlinks,proto3" json:"gitlinks,omitempty"`
 	// The commit id this must reproduce: checked when the git view is written, never trusted.
-	Commit        string `protobuf:"bytes,8,opt,name=commit,proto3" json:"commit,omitempty"`
+	Commit string `protobuf:"bytes,8,opt,name=commit,proto3" json:"commit,omitempty"`
+	// Entries the commit's tree spells with a mode git no longer writes (100664 from git's first
+	// months, a zero-padded 040000): the path and the mode as written, so the same tree, and the
+	// same commit id, come back. Empty for nearly every commit.
+	Modes []*GitMode `protobuf:"bytes,9,rep,name=modes,proto3" json:"modes,omitempty"`
+	// The author and committer lines' bytes when they aren't UTF-8 (Latin-1 names in old
+	// commits); `author` and `committer` then hold them made readable.
+	AuthorBytes    []byte `protobuf:"bytes,10,opt,name=author_bytes,json=authorBytes,proto3" json:"author_bytes,omitempty"`
+	CommitterBytes []byte `protobuf:"bytes,11,opt,name=committer_bytes,json=committerBytes,proto3" json:"committer_bytes,omitempty"`
+	// The commit's header lines after `committer`, exactly as written, when it has any that a
+	// git import can't carry (`mergetag` from merging a signed tag, `change-id`): written back
+	// verbatim. Empty for nearly every commit.
+	Headers       []byte `protobuf:"bytes,12,opt,name=headers,proto3" json:"headers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -438,6 +450,86 @@ func (x *GitOrigin) GetCommit() string {
 	return ""
 }
 
+func (x *GitOrigin) GetModes() []*GitMode {
+	if x != nil {
+		return x.Modes
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetAuthorBytes() []byte {
+	if x != nil {
+		return x.AuthorBytes
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetCommitterBytes() []byte {
+	if x != nil {
+		return x.CommitterBytes
+	}
+	return nil
+}
+
+func (x *GitOrigin) GetHeaders() []byte {
+	if x != nil {
+		return x.Headers
+	}
+	return nil
+}
+
+type GitMode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
+	Mode          string                 `protobuf:"bytes,2,opt,name=mode,proto3" json:"mode,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GitMode) Reset() {
+	*x = GitMode{}
+	mi := &file_gd_objects_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GitMode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GitMode) ProtoMessage() {}
+
+func (x *GitMode) ProtoReflect() protoreflect.Message {
+	mi := &file_gd_objects_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GitMode.ProtoReflect.Descriptor instead.
+func (*GitMode) Descriptor() ([]byte, []int) {
+	return file_gd_objects_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GitMode) GetPath() string {
+	if x != nil {
+		return x.Path
+	}
+	return ""
+}
+
+func (x *GitMode) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
 type Gitlink struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`
@@ -448,7 +540,7 @@ type Gitlink struct {
 
 func (x *Gitlink) Reset() {
 	*x = Gitlink{}
-	mi := &file_gd_objects_proto_msgTypes[5]
+	mi := &file_gd_objects_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -460,7 +552,7 @@ func (x *Gitlink) String() string {
 func (*Gitlink) ProtoMessage() {}
 
 func (x *Gitlink) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_objects_proto_msgTypes[5]
+	mi := &file_gd_objects_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -473,7 +565,7 @@ func (x *Gitlink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gitlink.ProtoReflect.Descriptor instead.
 func (*Gitlink) Descriptor() ([]byte, []int) {
-	return file_gd_objects_proto_rawDescGZIP(), []int{5}
+	return file_gd_objects_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Gitlink) GetPath() string {
@@ -500,7 +592,7 @@ type ChunkRef struct {
 
 func (x *ChunkRef) Reset() {
 	*x = ChunkRef{}
-	mi := &file_gd_objects_proto_msgTypes[6]
+	mi := &file_gd_objects_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +604,7 @@ func (x *ChunkRef) String() string {
 func (*ChunkRef) ProtoMessage() {}
 
 func (x *ChunkRef) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_objects_proto_msgTypes[6]
+	mi := &file_gd_objects_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +617,7 @@ func (x *ChunkRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChunkRef.ProtoReflect.Descriptor instead.
 func (*ChunkRef) Descriptor() ([]byte, []int) {
-	return file_gd_objects_proto_rawDescGZIP(), []int{6}
+	return file_gd_objects_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ChunkRef) GetId() []byte {
@@ -553,7 +645,7 @@ type Manifest struct {
 
 func (x *Manifest) Reset() {
 	*x = Manifest{}
-	mi := &file_gd_objects_proto_msgTypes[7]
+	mi := &file_gd_objects_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -565,7 +657,7 @@ func (x *Manifest) String() string {
 func (*Manifest) ProtoMessage() {}
 
 func (x *Manifest) ProtoReflect() protoreflect.Message {
-	mi := &file_gd_objects_proto_msgTypes[7]
+	mi := &file_gd_objects_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -578,7 +670,7 @@ func (x *Manifest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Manifest.ProtoReflect.Descriptor instead.
 func (*Manifest) Descriptor() ([]byte, []int) {
-	return file_gd_objects_proto_rawDescGZIP(), []int{7}
+	return file_gd_objects_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Manifest) GetSize() uint64 {
@@ -617,7 +709,7 @@ const file_gd_objects_proto_rawDesc = "" +
 	"\x06author\x18\x03 \x01(\tR\x06author\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12!\n" +
 	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\x12*\n" +
-	"\x03git\x18\x06 \x01(\v2\x18.gd.objects.v1.GitOriginR\x03git\"\x92\x02\n" +
+	"\x03git\x18\x06 \x01(\v2\x18.gd.objects.v1.GitOriginR\x03git\"\xa6\x03\n" +
 	"\tGitOrigin\x12\x16\n" +
 	"\x06author\x18\x01 \x01(\tR\x06author\x12\x1c\n" +
 	"\tcommitter\x18\x02 \x01(\tR\tcommitter\x12\x1a\n" +
@@ -626,7 +718,15 @@ const file_gd_objects_proto_rawDesc = "" +
 	"\x13signature_algorithm\x18\x05 \x01(\tR\x12signatureAlgorithm\x12\x1c\n" +
 	"\tsignature\x18\x06 \x01(\fR\tsignature\x122\n" +
 	"\bgitlinks\x18\a \x03(\v2\x16.gd.objects.v1.GitlinkR\bgitlinks\x12\x16\n" +
-	"\x06commit\x18\b \x01(\tR\x06commit\"5\n" +
+	"\x06commit\x18\b \x01(\tR\x06commit\x12,\n" +
+	"\x05modes\x18\t \x03(\v2\x16.gd.objects.v1.GitModeR\x05modes\x12!\n" +
+	"\fauthor_bytes\x18\n" +
+	" \x01(\fR\vauthorBytes\x12'\n" +
+	"\x0fcommitter_bytes\x18\v \x01(\fR\x0ecommitterBytes\x12\x18\n" +
+	"\aheaders\x18\f \x01(\fR\aheaders\"1\n" +
+	"\aGitMode\x12\x12\n" +
+	"\x04path\x18\x01 \x01(\tR\x04path\x12\x12\n" +
+	"\x04mode\x18\x02 \x01(\tR\x04mode\"5\n" +
 	"\aGitlink\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
 	"\x06commit\x18\x02 \x01(\tR\x06commit\",\n" +
@@ -655,7 +755,7 @@ func file_gd_objects_proto_rawDescGZIP() []byte {
 }
 
 var file_gd_objects_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_gd_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_gd_objects_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_gd_objects_proto_goTypes = []any{
 	(Mode)(0),          // 0: gd.objects.v1.Mode
 	(*TreeEntry)(nil),  // 1: gd.objects.v1.TreeEntry
@@ -663,9 +763,10 @@ var file_gd_objects_proto_goTypes = []any{
 	(*FileChange)(nil), // 3: gd.objects.v1.FileChange
 	(*Changeset)(nil),  // 4: gd.objects.v1.Changeset
 	(*GitOrigin)(nil),  // 5: gd.objects.v1.GitOrigin
-	(*Gitlink)(nil),    // 6: gd.objects.v1.Gitlink
-	(*ChunkRef)(nil),   // 7: gd.objects.v1.ChunkRef
-	(*Manifest)(nil),   // 8: gd.objects.v1.Manifest
+	(*GitMode)(nil),    // 6: gd.objects.v1.GitMode
+	(*Gitlink)(nil),    // 7: gd.objects.v1.Gitlink
+	(*ChunkRef)(nil),   // 8: gd.objects.v1.ChunkRef
+	(*Manifest)(nil),   // 9: gd.objects.v1.Manifest
 }
 var file_gd_objects_proto_depIdxs = []int32{
 	0, // 0: gd.objects.v1.TreeEntry.mode:type_name -> gd.objects.v1.Mode
@@ -673,13 +774,14 @@ var file_gd_objects_proto_depIdxs = []int32{
 	0, // 2: gd.objects.v1.FileChange.mode:type_name -> gd.objects.v1.Mode
 	3, // 3: gd.objects.v1.Changeset.changes:type_name -> gd.objects.v1.FileChange
 	5, // 4: gd.objects.v1.Changeset.git:type_name -> gd.objects.v1.GitOrigin
-	6, // 5: gd.objects.v1.GitOrigin.gitlinks:type_name -> gd.objects.v1.Gitlink
-	7, // 6: gd.objects.v1.Manifest.chunks:type_name -> gd.objects.v1.ChunkRef
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	7, // 5: gd.objects.v1.GitOrigin.gitlinks:type_name -> gd.objects.v1.Gitlink
+	6, // 6: gd.objects.v1.GitOrigin.modes:type_name -> gd.objects.v1.GitMode
+	8, // 7: gd.objects.v1.Manifest.chunks:type_name -> gd.objects.v1.ChunkRef
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_gd_objects_proto_init() }
@@ -693,7 +795,7 @@ func file_gd_objects_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gd_objects_proto_rawDesc), len(file_gd_objects_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

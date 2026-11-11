@@ -1,6 +1,6 @@
 #!/bin/sh
 # Print the Homebrew formula for a published release, using its checksum files.
-# Usage: scripts/homebrew-formula.sh v1.8.0 > Formula/gd.rb   (needs gh)
+# Usage: scripts/homebrew-formula.sh v1.8.0 > Formula/grovedock.rb   (needs gh)
 set -eu
 tag=$1
 
@@ -47,12 +47,11 @@ $(asset x86_64-unknown-linux-gnu)
   end
 
   def install
-    bin.install "gd", "grovedockd", "git-remote-gd"
+    bin.install "gd", "git-remote-gd"
   end
 
   test do
     assert_match version.to_s, shell_output("#{bin}/gd --version")
-    assert_match version.to_s, shell_output("#{bin}/grovedockd --version")
   end
 end
 RUBY

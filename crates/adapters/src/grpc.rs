@@ -32,7 +32,30 @@ pub fn status_err(s: tonic::Status) -> Error {
         tonic::Code::PermissionDenied => Error::PermissionDenied(s.message().to_owned()),
         tonic::Code::Aborted => Error::Conflict(s.message().to_owned()),
         tonic::Code::FailedPrecondition => Error::Rejected(s.message().to_owned()),
-        _ => storage_err(format!("upstream: {s}")),
+        _ => Error::Remote(words(&s)),
+    }
+}
+
+/// What a server's answer means, for the person reading it: no codes or transport details.
+pub fn words(s: &tonic::Status) -> String {
+    let m = s.message().trim();
+    let or = |fallback: &str| if m.is_empty() { fallback.to_owned() } else { m.to_owned() };
+    match s.code() {
+        tonic::Code::Unauthenticated => {
+            format!("{}: sign in with `gd login SERVER`, or check GD_TOKEN", or("the server didn't accept the token"))
+        }
+        // The connection never got to the server (refused, DNS, TLS, timeout dialling).
+        tonic::Code::Unavailable
+            if m.is_empty()
+                || ["connect", "transport", "dns", "tls", "certificate"]
+                    .iter()
+                    .any(|w| m.to_lowercase().contains(w)) =>
+        {
+            format!("can't reach the server ({m}); check the address and your connection, then try again")
+        }
+        tonic::Code::DeadlineExceeded => "the server took too long to answer; try again".to_owned(),
+        // Busy, over a plan's limits, refused: messages the server wrote for people, as they are.
+        _ => or("the server couldn't do that; try again"),
     }
 }
 
@@ -116,5 +139,24 @@ impl ObjectStore for GrpcObjects {
             }
         }
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod words_tests {
+    use super::words;
+    use tonic::{Code, Status};
+
+    #[test]
+    fn answers_read_as_what_to_do() {
+        assert_eq!(
+            words(&Status::new(Code::Unauthenticated, "missing bearer token")),
+            "missing bearer token: sign in with `gd login SERVER`, or check GD_TOKEN"
+        );
+        assert!(words(&Status::new(Code::Unavailable, "tcp connect error")).starts_with("can't reach the server"));
+        // A server's own words for people pass through untouched.
+        assert_eq!(words(&Status::new(Code::Unavailable, "service is busy; retry")), "service is busy; retry");
+        assert_eq!(words(&Status::new(Code::ResourceExhausted, "too many calls")), "too many calls");
+        assert_eq!(words(&Status::new(Code::Internal, "")), "the server couldn't do that; try again");
     }
 }

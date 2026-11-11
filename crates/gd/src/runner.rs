@@ -269,12 +269,28 @@ fn client(saved: &Saved) -> Result<Client> {
         .max_encoding_message_size(grovedock_proto::MAX_MESSAGE_BYTES))
 }
 
+/// How long a starting runner waits for Docker to clean up after a crashed job.
+const CLEANUP_WITHIN: Duration = Duration::from_secs(10);
+
 async fn start(saved: Saved, work: PathBuf, once: bool, mode: Mode) -> Result<()> {
+    if mode.image.is_some() {
+        crate::containers::check_docker().await?;
+    }
     let mut c = client(&saved)?;
     let (os, arch) = machine();
     // In containers, jobs run on Linux whatever this machine is.
     let labels = wf::machine_labels(if mode.image.is_some() { "linux" } else { os }, arch);
-    crate::containers::clean_runner(&saved.identity()).await;
+    // Containers a crashed job left behind go first, before any job is taken: they carry this
+    // runner's label, so a cleanup still running when a job starts would remove that job's
+    // containers too. Docker installed but not running hangs instead of answering, so it gets
+    // a few seconds (the timeout stops the docker command) and the runner goes on without it.
+    let cleaned = tokio::time::timeout(CLEANUP_WITHIN, crate::containers::clean_runner(&saved.identity())).await;
+    if cleaned.is_err() {
+        eprintln!(
+            "Docker didn't answer within {}s, so containers an earlier job left (if any) stay; jobs without containers run as usual",
+            CLEANUP_WITHIN.as_secs()
+        );
+    }
     eprintln!(
         "runner {} for {} on {} is waiting for jobs{} (Ctrl-C to stop)",
         saved.name,
@@ -579,7 +595,13 @@ async fn execute(
     });
     let mut github = github;
     github["workspace"] = json!(workspace);
-    let secrets: serde_json::Map<String, Value> = job.secrets.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
+    // The job's own token (read-only for this repository, gone when the job ends), for workflows
+    // that call Grovedock: grovedock.token and secrets.GROVEDOCK_TOKEN. github.token stays empty:
+    // actions send it to api.github.com (release lists and the like), where it would only be
+    // refused, and it isn't GitHub's to see.
+    github["grovedock_token"] = json!(job.token);
+    let mut secrets: serde_json::Map<String, Value> = job.secrets.iter().map(|(k, v)| (k.clone(), json!(v))).collect();
+    secrets.entry("GROVEDOCK_TOKEN").or_insert_with(|| json!(job.token));
     let mut base_scope = expr::Scope::default()
         .with("github", github.clone())
         .with("needs", needs.clone())
@@ -770,6 +792,7 @@ async fn execute(
         step_env.insert("GITHUB_ENV".into(), step_env_file.display().to_string());
         step_env.insert("GITHUB_PATH".into(), step_path_file.display().to_string());
         step_env.insert("GITHUB_STEP_SUMMARY".into(), summary.display().to_string());
+        grovedock_names(&mut step_env, github["grovedock_event"].as_str());
         // Always set: an action's own steps add to it (`$GITHUB_PATH`) from this base.
         step_env.insert(
             "PATH".into(),
@@ -804,6 +827,16 @@ async fn execute(
                 }
             },
             (None, None) => StepOutcome::Failed("a step needs run or uses".into()),
+        };
+        // A step stopped because the job's time ran out says so, not the minute it had left.
+        let outcome = match outcome {
+            StepOutcome::Failed(why) if why.starts_with("Timed out") && job_started.elapsed() >= job_limit => {
+                StepOutcome::Failed(format!(
+                    "The job reached its {}-minute limit (timeout-minutes)",
+                    job.timeout_minutes
+                ))
+            }
+            o => o,
         };
         out.add_summary(&std::fs::read_to_string(&summary).unwrap_or_default());
         // What the step left for later steps.
@@ -898,8 +931,37 @@ enum StepOutcome {
 /// arduino/setup-protoc, pnpm/action-setup…): on a self-hosted runner the toolchain is already
 /// there, so they're answered without running anyone's code.
 /// Steps the runner does itself: checkout, artifacts, releases and caches.
-fn is_builtin(uses: &str) -> bool {
+/// Every `GITHUB_*` variable a step gets, also as `GROVEDOCK_*` (`$GROVEDOCK_OUTPUT`,
+/// `$GROVEDOCK_SHA`…), so a workflow written for Grovedock needn't name GitHub;
+/// `GROVEDOCK_EVENT_NAME` is the event in Grovedock's words (`change_request`).
+fn grovedock_names(env: &mut BTreeMap<String, String>, event: Option<&str>) {
+    let own: Vec<(String, String)> = env
+        .iter()
+        .filter(|(k, _)| k.starts_with("GITHUB_") && k.as_str() != "GITHUB_ACTIONS")
+        .map(|(k, v)| (format!("GROVEDOCK_{}", &k["GITHUB_".len()..]), v.clone()))
+        .collect();
+    for (k, v) in own {
+        env.entry(k).or_insert(v);
+    }
+    if let Some(e) = event.filter(|e| !e.is_empty()) {
+        env.insert("GROVEDOCK_EVENT_NAME".into(), e.to_owned());
+    }
+}
+
+/// Grovedock's own names for the actions the runner does itself.
+fn builtin_name(uses: &str) -> String {
     let name = uses.split('@').next().unwrap_or(uses).to_ascii_lowercase();
+    match name.as_str() {
+        "grovedock/checkout" => "actions/checkout".into(),
+        "grovedock/upload-artifact" => "actions/upload-artifact".into(),
+        "grovedock/download-artifact" => "actions/download-artifact".into(),
+        "grovedock/cache" => "actions/cache".into(),
+        _ => name,
+    }
+}
+
+fn is_builtin(uses: &str) -> bool {
+    let name = builtin_name(uses);
     cache_action(&name)
         || matches!(
             name.as_str(),
@@ -1169,7 +1231,7 @@ async fn builtin(
     temp: &Path,
     out: &Output,
 ) -> StepOutcome {
-    let name = uses.split('@').next().unwrap_or(uses).to_ascii_lowercase();
+    let name = builtin_name(uses);
     let with = |k: &str| step.with.get(k).map(|v| expr::interpolate(v, scope).unwrap_or_else(|_| v.clone()));
     match name.as_str() {
         "actions/checkout" => {
@@ -1487,9 +1549,10 @@ async fn fetch_action(uses: &str, ctx: &Local<'_>) -> Result<PathBuf> {
     Ok(if sub.is_empty() { dir } else { dir.join(sub) })
 }
 
-/// A Node (18 or later) to run JavaScript actions with: the job container's or this machine's,
-/// else one downloaded from nodejs.org (once per machine; per job inside a container), as
-/// GitHub's runner brings its own.
+/// A Node (24 or later) to run JavaScript actions with: the job container's or this machine's,
+/// else Node 24 from nodejs.org (once per machine; per job inside a container), as GitHub's
+/// runner brings its own. GitHub runs `node20` actions on Node 24 too, and some need it
+/// (pnpm 11, which pnpm/action-setup installs, needs Node 22.13+).
 async fn node_for(ctx: &Local<'_>) -> Result<String> {
     let boxed = ctx.sh.boxed.filter(|b| b.container.is_some());
     if let Some(b) = boxed {
@@ -1497,7 +1560,7 @@ async fn node_for(ctx: &Local<'_>) -> Result<String> {
             return Ok("node".into());
         }
     } else if std::process::Command::new("node")
-        .args(["-e", "process.exit(+process.versions.node.split('.')[0] < 18)"])
+        .args(["-e", "process.exit(+process.versions.node.split('.')[0] < 24)"])
         .status()
         .is_ok_and(|s| s.success())
     {
@@ -1509,7 +1572,7 @@ async fn node_for(ctx: &Local<'_>) -> Result<String> {
     let home = if boxed.is_some() {
         ctx.temp.join("_node")
     } else {
-        runners_dir()?.join(format!("externals/node20-{os}-{arch}"))
+        runners_dir()?.join(format!("externals/node24-{os}-{arch}"))
     };
     let bin = home.join("bin/node");
     if !bin.exists() {
@@ -1517,8 +1580,8 @@ async fn node_for(ctx: &Local<'_>) -> Result<String> {
         let full = list
             .iter()
             .filter_map(|r| r["version"].as_str())
-            .find(|v| v.starts_with("v20."))
-            .context("nodejs.org lists no Node 20")?
+            .find(|v| v.starts_with("v24."))
+            .context("nodejs.org lists no Node 24")?
             .to_owned();
         ctx.out.line(&format!("Getting Node {full} to run actions"));
         let url = format!("https://nodejs.org/dist/{full}/node-{full}-{os}-{arch}.tar.gz");
@@ -1760,6 +1823,8 @@ async fn download_artifact(
         if !r.status().is_success() {
             bail!("{} couldn't be fetched ({})", l.name, r.status());
         }
+        let kind =
+            r.headers().get(reqwest::header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("").to_owned();
         let tarball = temp.join(format!("download-{}.tar.gz", l.name));
         let mut f = tokio::fs::File::create(&tarball).await?;
         let mut size = 0u64;
@@ -1770,7 +1835,16 @@ async fn download_artifact(
         tokio::io::AsyncWriteExt::flush(&mut f).await?;
         let o = tokio::process::Command::new("tar").arg("xzf").arg(&tarball).arg("-C").arg(&into).output().await?;
         if !o.status.success() {
-            bail!("tar: {}", String::from_utf8_lossy(&o.stderr).trim());
+            // What came back instead of the artifact, so the cause shows in the log.
+            let head: Vec<u8> = std::fs::read(&tarball).unwrap_or_default().into_iter().take(48).collect();
+            bail!(
+                "{} came back as {} ({}, starting {:?}); tar: {}",
+                l.name,
+                human_size(size),
+                if kind.is_empty() { "no content type" } else { &kind },
+                String::from_utf8_lossy(&head),
+                String::from_utf8_lossy(&o.stderr).trim()
+            );
         }
         out.line(&format!(
             "Got artifact {} ({}) into {}",

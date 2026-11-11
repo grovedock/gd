@@ -5,6 +5,7 @@ pub mod conformance;
 pub mod credentials;
 pub mod features;
 pub mod gitfe;
+pub mod gitmodes;
 pub mod mcp;
 pub mod mcp_remote;
 pub mod mount;
@@ -49,5 +50,13 @@ pub fn default_author() -> String {
         (Some(n), Some(e)) => format!("{n} <{e}>"),
         (Some(n), None) => n,
         _ => std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
+    }
+}
+
+/// "1 file", "2 files": counts in messages read like sentences.
+pub fn files(n: impl Into<u64>) -> String {
+    match n.into() {
+        1 => "1 file".into(),
+        n => format!("{n} files"),
     }
 }

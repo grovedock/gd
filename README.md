@@ -63,8 +63,8 @@ sequenceDiagram
 ## Try it in a minute
 
 ```sh
-brew install kabirnarang39/tap/gd     # or: curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
-                                      # or: cargo install grovedock
+brew install kabirnarang39/tap/grovedock  # or: curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
+                                          # or: cargo install --locked --git https://github.com/grovedock/gd grovedock
 
 gd login https://cloud.grovedock.com                             # opens your browser; free, no card
 gd import-git . --server https://cloud.grovedock.com/acme/web   # bring a git repository, history included

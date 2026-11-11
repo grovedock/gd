@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use grovedock_core::{Id, paths_overlap};
 
 use crate::remote::Remote;
-use crate::workspace::{ChangeKind, Workspace, is_large};
+use crate::workspace::{ChangeKind, LocalChange, Workspace, is_large};
 
 /// Upload batch ceiling (compressed bytes) per Put stream.
 const UPLOAD_BATCH_BYTES: usize = 32 << 20;
@@ -15,7 +15,7 @@ const UPLOAD_BATCH_BYTES: usize = 32 << 20;
 pub struct Committed {
     pub id: Id,
     pub files: usize,
-    /// Objects actually sent: content the server already had is skipped.
+    /// Objects sent: a small commit goes whole; a larger one only with what the server lacks.
     pub uploaded: usize,
 }
 
@@ -46,15 +46,70 @@ pub async fn run(
     for (p, (id, _)) in small.iter().zip(&encoded) {
         ids.insert(p.clone(), *id);
     }
-    let mut uploaded = upload(remote, &encoded).await?;
+    // A small commit (an agent's usual edit) is sent whole: that costs less than a round trip
+    // to ask which objects the server lacks, and the server keeps one copy of what it had.
+    let mut uploaded = if encoded.iter().map(|(_, p)| p.len()).sum::<usize>() <= SEND_WITHOUT_ASKING {
+        remote.objects().put_many(encoded.clone()).await?;
+        encoded.len()
+    } else {
+        upload(remote, &encoded).await?
+    };
     for p in &large {
         let (id, n) = upload_large(remote, &ws.abs(p)).await?;
         ids.insert(p.clone(), id);
         uploaded += n;
     }
 
+    let file_changes = file_changes(&changes, &ids);
+    let cs = changeset(ws, &file_changes, message, author);
+    let created = remote.create_changeset(cs).await?;
+    record(ws, &changes, &file_changes, created.id)?;
+    Ok(Some(Committed { id: created.id, files: file_changes.len(), uploaded }))
+}
+
+/// `gd commit --land` in one round trip (protocol 1.2) for an agent's usual edit: a small change
+/// on landed history, its files, the change and the land in one call. `None`: commit and land
+/// the usual way instead (a server before 1.2, a larger change, or one the server refused,
+/// whose refusal the usual way then reports, protected branches going to review included).
+pub async fn run_and_land(
+    remote: &dyn Remote,
+    ws: &mut Workspace,
+    message: &str,
+    author: &str,
+    pathspecs: &[String],
+) -> Result<Option<(Committed, super::land::LandOutcome)>> {
+    if message.trim().is_empty() || !(ws.base_landed || ws.base.is_none()) {
+        return Ok(None);
+    }
+    let changes = ws.status(pathspecs)?;
+    let upserts: Vec<String> =
+        changes.iter().filter(|c| c.kind != ChangeKind::Deleted).map(|c| c.path.clone()).collect();
+    if changes.is_empty() || upserts.iter().any(|p| is_large(&ws.abs(p))) {
+        return Ok(None);
+    }
+    let encoded = ws.encode_files(&upserts)?;
+    if encoded.len() > ONE_CALL_OBJECTS || encoded.iter().map(|(_, p)| p.len()).sum::<usize>() > ONE_CALL_BYTES {
+        return Ok(None);
+    }
+    let ids: HashMap<String, Id> = upserts.iter().cloned().zip(encoded.iter().map(|(id, _)| *id)).collect();
+    let file_changes = file_changes(&changes, &ids);
+    let cs = changeset(ws, &file_changes, message, author);
+    let sent = encoded.len();
+    let Some((created, landed, rebased)) = remote.create_and_land(&ws.config.ref_name, encoded, cs).await? else {
+        return Ok(None);
+    };
+    record(ws, &changes, &file_changes, created)?;
+    let landed = super::land::settle(remote, ws, created, landed, rebased, 1).await?;
+    Ok(Some((Committed { id: created, files: file_changes.len(), uploaded: sent }, landed)))
+}
+
+/// What a commit sends in one call at most (the server takes 1,024 objects and 4 MiB).
+const ONE_CALL_OBJECTS: usize = 1024;
+const ONE_CALL_BYTES: usize = 3 << 20;
+
+fn file_changes(changes: &[LocalChange], ids: &HashMap<String, Id>) -> Vec<FileChange> {
     let mut file_changes = Vec::with_capacity(changes.len());
-    for c in &changes {
+    for c in changes {
         if c.kind == ChangeKind::Deleted {
             file_changes.push(FileChange::delete(c.path.clone()));
         } else {
@@ -67,27 +122,35 @@ pub async fn run(
     // and sending both would be ambiguous, so drop the redundant delete.
     let upsert_paths: Vec<String> = file_changes.iter().filter(|c| !c.is_delete()).map(|c| c.path.clone()).collect();
     file_changes.retain(|c| !c.is_delete() || !upsert_paths.iter().any(|u| paths_overlap(u, &c.path)));
-    let cs = Changeset {
+    file_changes
+}
+
+fn changeset(ws: &Workspace, file_changes: &[FileChange], message: &str, author: &str) -> Changeset {
+    Changeset {
         parents: ws.base.map(|b| vec![b.0.to_vec()]).unwrap_or_default(),
-        changes: file_changes.clone(),
+        changes: file_changes.to_vec(),
         author: author.to_owned(),
         message: message.to_owned(),
         timestamp_ms: crate::now_ms(),
         git: None,
-    };
-    let created = remote.create_changeset(cs).await?;
+    }
+}
+
+/// The working copy after `created` exists: its files are clean, and it's the new base.
+fn record(ws: &mut Workspace, changes: &[LocalChange], file_changes: &[FileChange], created: Id) -> Result<()> {
     for c in changes.iter().filter(|c| c.kind == ChangeKind::Deleted) {
         ws.index.remove(&c.path);
     }
-    for c in &file_changes {
+    for c in file_changes {
         if let Some(id) = c.blob_id()? {
             ws.mark_clean(&c.path, grovedock_core::object::Mode::parse(c.mode)?, id)?;
         }
     }
-    ws.base = Some(created.id);
+    // On landed history (or the first commit): it's the only change `gd land` has to send.
+    ws.parent_landed = ws.base_landed || ws.base.is_none();
+    ws.base = Some(created);
     ws.base_landed = false;
-    ws.save()?;
-    Ok(Some(Committed { id: created.id, files: file_changes.len(), uploaded }))
+    ws.save()
 }
 
 /// Chunk a large file on a blocking thread and upload chunks as they are produced, then
@@ -116,6 +179,9 @@ pub async fn upload_large(remote: &dyn Remote, abs: &std::path::Path) -> Result<
     sent += upload(remote, &[(id, manifest)]).await?;
     Ok((id, sent))
 }
+
+/// A commit's files this small go without first asking what the server lacks.
+const SEND_WITHOUT_ASKING: usize = 64 << 10;
 
 /// Upload only what the server is missing, in bounded batches.
 pub async fn upload(remote: &dyn Remote, objects: &[(Id, Bytes)]) -> Result<usize> {

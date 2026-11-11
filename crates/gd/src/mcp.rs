@@ -170,7 +170,7 @@ impl SapMcp {
             .await
             .map_err(err)?
         {
-            Some(c) => Ok(format!("committed {} ({} files)", c.id, c.files)),
+            Some(c) => Ok(format!("committed {} ({})", c.id, crate::files(c.files as u64))),
             None => Ok("nothing to commit".into()),
         }
     }
@@ -192,6 +192,6 @@ impl SapMcp {
     async fn gd_sync(&self, Parameters(_): Parameters<Empty>) -> ToolResult {
         let mut ws = self.ws()?;
         let out = sync::run(self.remote.as_ref(), &mut ws, None).await.map_err(err)?;
-        Ok(format!("at {} ({} files changed)", out.to, out.changed))
+        Ok(format!("at {} ({} changed)", out.to, crate::files(out.changed as u64)))
     }
 }

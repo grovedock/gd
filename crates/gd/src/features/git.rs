@@ -27,6 +27,8 @@ pub(crate) const COMMIT_BATCH: usize = 2_000;
 #[derive(Debug, Default)]
 pub struct ImportOutcome {
     pub commits: usize,
+    /// Commits an earlier, interrupted run had already sent (see [`Checkpoint`]).
+    pub resumed: usize,
     pub blobs: usize,
     pub uploaded: usize,
     pub skipped_submodules: usize,
@@ -90,16 +92,35 @@ pub async fn import(
 ) -> Result<ImportOutcome> {
     require(flags, Flag::GitImport)?;
     let tip_sha = git(git_dir, &["rev-parse", "--verify", &format!("{git_ref}^{{commit}}")])?;
-    let mut child = Command::new("git")
-        .arg("-C")
+    let total = git(git_dir, &["rev-list", "--count", git_ref]).ok().and_then(|n| n.parse().ok());
+    // Modes git no longer writes (git's first months): recorded with each commit, or its id
+    // can't come back. One quick pass finds none in nearly every repository.
+    let raw_modes = crate::gitmodes::raw_modes(git_dir, git_ref).unwrap_or_else(|e| {
+        eprintln!("  warning: couldn't read raw tree modes ({e:#}); commits with old modes would get new ids");
+        HashMap::new()
+    });
+    if !raw_modes.is_empty() {
+        eprintln!(
+            "  {} commits keep what a git import can't carry (old file modes, mergetag headers)",
+            thousands(raw_modes.len())
+        );
+    }
+    let checkpoint = Checkpoint::open(remote, git_dir, git_ref, target_ref).await?;
+    let mut out = ImportOutcome { resumed: checkpoint.done.len(), ..Default::default() };
+    if out.resumed > 0 {
+        eprintln!("  resuming: {} commits are already on the server", thousands(out.resumed));
+    }
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(git_dir)
         .args(["fast-export", "--signed-tags=strip", "--tag-of-filtered-object=drop", "--show-original-ids"])
-        .args(identity_args())
-        .arg(git_ref)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .context("spawning git fast-export")?;
+        .args(identity_args());
+    // git skips what the marks name and refers to it by mark: only the rest is exported again.
+    if let Some(marks) = &checkpoint.git_marks {
+        cmd.arg(format!("--import-marks={}", marks.display()));
+    }
+    let mut child =
+        cmd.arg(git_ref).stdout(Stdio::piped()).stderr(Stdio::inherit()).spawn().context("spawning git fast-export")?;
     let stdout = child.stdout.take().expect("piped");
 
     let (tx, mut rx) = tokio::sync::mpsc::channel::<Result<Item>>(256);
@@ -122,15 +143,14 @@ pub async fn import(
         }
     });
 
-    let mut out = ImportOutcome::default();
     let mut blob_marks: HashMap<u64, Id> = HashMap::new();
-    let mut commit_marks: HashMap<u64, Id> = HashMap::new();
-    let mut by_oid: HashMap<String, Id> = HashMap::new();
+    let mut commit_marks: HashMap<u64, Id> = checkpoint.done.iter().map(|(m, _, id)| (*m, *id)).collect();
+    let mut by_oid: HashMap<String, Id> = checkpoint.done.iter().map(|(_, sha, id)| (sha.clone(), *id)).collect();
     let mut pending: Vec<(Id, Bytes)> = Vec::new();
     let mut pending_bytes = 0;
     // Commits wait here and go to the server together (one stream, no round trip each);
     // `queued` maps a mark to its position in the batch, for parents inside it.
-    let mut batch = Batch::default();
+    let mut batch = Batch { progress: Progress::new(total), checkpoint, ..Default::default() };
 
     while let Some(item) = rx.recv().await {
         match item? {
@@ -161,7 +181,13 @@ pub async fn import(
                     })
                     .collect::<Result<Vec<_>>>()?;
                 let first = marks.first().and_then(|m| commit_marks.get(m)).copied();
-                let cs = changeset_of(remote, &c, &blob_marks, first, &mut out).await?;
+                let mut cs = changeset_of(remote, &c, &blob_marks, first, &mut out).await?;
+                if let Some(g) = cs.git.as_mut()
+                    && let Some(raw) = raw_modes.get(&g.commit)
+                {
+                    g.modes = raw.modes.clone();
+                    g.headers = raw.headers.clone();
+                }
                 batch.push(parents, cs, c.mark, c.original_oid.clone());
                 if batch.items.len() >= COMMIT_BATCH {
                     batch.send(remote, &mut pending, &mut out, &mut commit_marks, &mut by_oid).await?;
@@ -180,6 +206,7 @@ pub async fn import(
     out.tip = Some(tip);
     out.changes = by_oid;
     move_ref(remote, target_ref, tip, force).await?;
+    batch.checkpoint.finish();
     Ok(out)
 }
 
@@ -300,6 +327,8 @@ struct Batch {
     items: Vec<(Vec<Parent>, Changeset)>,
     meta: Vec<(Option<u64>, Option<String>)>,
     queued: HashMap<u64, usize>,
+    progress: Progress,
+    checkpoint: Checkpoint,
 }
 
 impl Batch {
@@ -324,9 +353,13 @@ impl Batch {
             return Ok(());
         }
         let ids = remote.create_changesets(std::mem::take(&mut self.items)).await?;
+        let mut sent = Vec::new();
         for (id, (mark, oid)) in ids.into_iter().zip(self.meta.drain(..)) {
             if let Some(m) = mark {
                 commit_marks.insert(m, id);
+            }
+            if let (Some(m), Some(oid)) = (mark, &oid) {
+                sent.push((m, oid.clone(), id));
             }
             if let Some(oid) = oid {
                 by_oid.insert(oid, id);
@@ -334,9 +367,137 @@ impl Batch {
             out.commits += 1;
         }
         self.queued.clear();
-        eprintln!("  imported {} commits", out.commits);
+        // On the server now: a run killed from here on resumes after these.
+        self.checkpoint.record(&sent);
+        eprintln!("  {}", self.progress.line(out.resumed + out.commits, out.commits));
         Ok(())
     }
+}
+
+/// Where an interrupted import picks up: after each batch the server accepted, its commits
+/// (fast-export mark, git sha, change) are appended to a log in the git directory. The next run
+/// hands them to `git fast-export --import-marks`, so only the rest is exported and sent. Kept
+/// per destination, source ref and target branch; removed when the import finishes.
+#[derive(Default)]
+struct Checkpoint {
+    log: Option<PathBuf>,
+    /// The marks file git reads (`:MARK SHA`), when there is something to resume.
+    git_marks: Option<PathBuf>,
+    done: Vec<(u64, String, Id)>,
+}
+
+impl Checkpoint {
+    async fn open(remote: &dyn Remote, git_dir: &Path, git_ref: &str, target_ref: &str) -> Result<Checkpoint> {
+        let Ok(dir) = git(git_dir, &["rev-parse", "--absolute-git-dir"]) else { return Ok(Checkpoint::default()) };
+        // Per destination too: an import of the same history to another server (or repository)
+        // keeps its own checkpoint, and never ends or empties this one.
+        let key = blake3::hash(format!("{}\n{git_ref}\n{target_ref}", remote.address()).as_bytes()).to_hex();
+        let dir = PathBuf::from(dir).join("gd-import");
+        let log = dir.join(format!("{}.log", &key[..16]));
+        let done = std::fs::read_to_string(&log).map(|t| parse_checkpoint(&t)).unwrap_or_default();
+        // Changes are content addresses: when the server has the last one, it has everything
+        // it was built on. Otherwise (another server, or the repository was reset) start over.
+        let usable = match done.last() {
+            None => false,
+            Some((_, _, id)) => remote.changeset(&id.to_hex()).await.is_ok(),
+        };
+        if !usable {
+            let _ = std::fs::remove_file(&log);
+            std::fs::create_dir_all(&dir).ok();
+            return Ok(Checkpoint { log: Some(log), ..Default::default() });
+        }
+        let marks = log.with_extension("marks");
+        let text: String = done.iter().map(|(m, sha, _)| format!(":{m} {sha}\n")).collect();
+        std::fs::write(&marks, text).context("writing the import's marks")?;
+        Ok(Checkpoint { log: Some(log), git_marks: Some(marks), done })
+    }
+
+    /// Appends what the server just accepted. Best effort: without it, a rerun starts over.
+    fn record(&mut self, sent: &[(u64, String, Id)]) {
+        use std::io::Write;
+        let Some(log) = &self.log else { return };
+        let text: String = sent.iter().map(|(m, sha, id)| format!("{m} {sha} {}\n", id.to_hex())).collect();
+        let ok = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+            .and_then(|mut f| f.write_all(text.as_bytes()).and_then(|_| f.sync_data()));
+        if ok.is_err() {
+            self.log = None;
+        }
+    }
+
+    fn finish(&self) {
+        if let Some(log) = &self.log {
+            let _ = std::fs::remove_file(log);
+            let _ = std::fs::remove_file(log.with_extension("marks"));
+        }
+    }
+}
+
+/// Lines `MARK SHA CHANGE`; a line cut short by a kill (the last) is ignored.
+fn parse_checkpoint(text: &str) -> Vec<(u64, String, Id)> {
+    text.lines()
+        .filter_map(|l| {
+            let mut f = l.split(' ');
+            let mark = f.next()?.parse().ok()?;
+            let sha = f.next().filter(|s| s.len() == 40 || s.len() == 64)?.to_owned();
+            let id: Id = f.next()?.parse().ok()?;
+            f.next().is_none().then_some((mark, sha, id))
+        })
+        .collect()
+}
+
+/// `imported 14,000 of 82,542 commits (17%), 230 a second, about 5 min to go`.
+#[derive(Default)]
+struct Progress {
+    total: Option<usize>,
+    started: Option<std::time::Instant>,
+}
+
+impl Progress {
+    fn new(total: Option<usize>) -> Progress {
+        Progress { total, started: Some(std::time::Instant::now()) }
+    }
+
+    /// `done` in all, `this_run` of them sent by this run (the rate counts only those).
+    fn line(&self, done: usize, this_run: usize) -> String {
+        let secs = self.started.map_or(0.0, |s| s.elapsed().as_secs_f64()).max(0.001);
+        let rate = this_run as f64 / secs;
+        let mut s = format!("imported {}", thousands(done));
+        if let Some(total) = self.total.filter(|t| *t >= done && *t > 0) {
+            s += &format!(" of {} commits ({}%)", thousands(total), done * 100 / total);
+            if rate >= 0.5 {
+                s += &format!(", {} a second", thousands(rate.round() as usize));
+                if total > done {
+                    s += &format!(", about {} to go", eta((total - done) as f64 / rate));
+                }
+            }
+        } else {
+            s += " commits";
+        }
+        s
+    }
+}
+
+fn eta(secs: f64) -> String {
+    match secs as u64 {
+        0..60 => "a minute".into(),
+        s @ 60..5400 => format!("{} min", s.div_ceil(60)),
+        s => format!("{:.1} h", s as f64 / 3600.0),
+    }
+}
+
+fn thousands(n: usize) -> String {
+    let d = n.to_string();
+    let mut out = String::new();
+    for (i, c) in d.chars().enumerate() {
+        if i > 0 && (d.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// What git needs to make `c` again, when it came from git (it has an original id). A deleted
@@ -353,21 +514,20 @@ fn git_origin(c: &GitCommit, gitlinks: Vec<Gitlink>) -> Option<GitOrigin> {
         signature: c.signature.as_ref().map(|s| s.1.clone()).unwrap_or_default(),
         gitlinks,
         commit,
+        // Filled in by import, which reads the raw trees (crate::gitmodes).
+        modes: Vec::new(),
+        author_bytes: c.author_bytes.clone(),
+        committer_bytes: c.committer_bytes.clone(),
+        // Filled in by import too, from the raw commit (crate::gitmodes).
+        headers: Vec::new(),
     })
 }
 
 /// fast-export options that keep what git hashes: the message's own encoding, and commit
-/// signatures (git 2.48+; older git strips them, so those commits get new ids).
+/// signatures (git 2.48+; with older git, import keeps them from the raw commit instead).
 pub fn identity_args() -> Vec<&'static str> {
-    static SIGNED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    let signed = *SIGNED.get_or_init(|| {
-        std::process::Command::new("git").args(["fast-export", "-h"]).output().is_ok_and(|o| {
-            String::from_utf8_lossy(&o.stdout).contains("signed-commits")
-                || String::from_utf8_lossy(&o.stderr).contains("signed-commits")
-        })
-    });
     let mut args = vec!["--reencode=no"];
-    if signed {
+    if crate::gitmodes::fast_export_carries_signatures() {
         args.push("--signed-commits=verbatim");
     }
     args
@@ -490,21 +650,46 @@ async fn write_commits(
         .arg(git_dir)
         // On case-insensitive filesystems git defaults to core.ignorecase=true, which makes
         // fast-import fold case-only renames onto the old name. History must be exact.
-        .args(["-c", "core.ignorecase=false", "fast-import", "--quiet", "--force"])
+        .args(["-c", "core.ignorecase=false", "fast-import", "--quiet", "--force", "--cat-blob-fd=1"])
         .arg(format!("--export-marks={}", marks_file.display()))
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .context("spawning git fast-import")?;
     let mut w = Writer { w: BufWriter::with_capacity(1 << 20, child.stdin.take().expect("piped")) };
+    // Answers to `get-mark` (only for commits with modes git no longer writes).
+    let mut answers = std::io::BufReader::new(child.stdout.take().expect("piped"));
+    // Those commits, rewritten with their modes: later commits name them by id.
+    let mut patched: HashMap<Id, String> = HashMap::new();
+    let mut modes_of: HashMap<Id, Vec<grovedock_core::object::GitMode>> = nodes
+        .iter()
+        .map(|rc| (rc.id, rc.changeset.git.as_ref().map(|g| g.modes.clone()).unwrap_or_default()))
+        .collect();
+    let signatures_carried = crate::gitmodes::fast_export_carries_signatures();
+    let headers_of: HashMap<Id, Vec<u8>> = nodes
+        .iter()
+        .filter_map(|rc| {
+            let g = rc.changeset.git.as_ref()?;
+            if !g.headers.is_empty() {
+                Some((rc.id, g.headers.clone()))
+            } else if !g.signature.is_empty() && !signatures_carried {
+                let h = crate::gitmodes::signature_headers(&g.encoding, &g.signature_algorithm, &g.signature);
+                Some((rc.id, h))
+            } else {
+                None
+            }
+        })
+        .collect();
     let objects = remote.objects();
     let mut blob_marks: HashMap<Id, u64> = HashMap::new();
     let mut commit_marks: HashMap<Id, u64> = HashMap::new();
     let mut next_mark = 1u64;
     let refname = format!("refs/heads/{git_ref}");
-    let parent_ref = |p: &Id, marks: &HashMap<Id, u64>| -> Result<String> {
-        match (marks.get(p), known.get(p)) {
-            (Some(m), _) => Ok(format!(":{m}")),
-            (None, Some(sha)) => Ok(sha.clone()),
+    let parent_ref = |p: &Id, marks: &HashMap<Id, u64>, patched: &HashMap<Id, String>| -> Result<String> {
+        match (patched.get(p), marks.get(p), known.get(p)) {
+            (Some(sha), _, _) => Ok(sha.clone()),
+            (None, Some(m), _) => Ok(format!(":{m}")),
+            (None, None, Some(sha)) => Ok(sha.clone()),
             _ => bail!("parent {p} is neither written nor known to git"),
         }
     };
@@ -546,9 +731,9 @@ async fn write_commits(
             })
             .collect::<Result<_>>()?;
         let parents = cs.parent_ids()?;
-        let from = parents.first().map(|p| parent_ref(p, &commit_marks)).transpose()?;
+        let from = parents.first().map(|p| parent_ref(p, &commit_marks, &patched)).transpose()?;
         let merges: Vec<String> =
-            parents.iter().skip(1).map(|p| parent_ref(p, &commit_marks)).collect::<Result<_>>()?;
+            parents.iter().skip(1).map(|p| parent_ref(p, &commit_marks, &patched)).collect::<Result<_>>()?;
         let mark = next_mark;
         next_mark += 1;
         let header = crate::gitfe::Header {
@@ -561,10 +746,39 @@ async fn write_commits(
         };
         w.commit(&refname, mark, &header, &ops)?;
         commit_marks.insert(rc.id, mark);
+        // A tree with modes git no longer writes, or one whose parent had them (fast-import
+        // keeps the parent's): fast-import wrote it canonical; put back the modes as written.
+        let own = modes_of.get(&rc.id).cloned().unwrap_or_default();
+        let inherited = match parents.first() {
+            None => Vec::new(),
+            Some(p) => match modes_of.get(p) {
+                Some(m) => m.clone(),
+                None => {
+                    let m = remote.changeset(&p.to_hex()).await?.changeset.git.map(|g| g.modes).unwrap_or_default();
+                    modes_of.insert(*p, m.clone());
+                    m
+                }
+            },
+        };
+        let headers = headers_of.get(&rc.id).map(Vec::as_slice).unwrap_or_default();
+        if !own.is_empty() || !inherited.is_empty() || !headers.is_empty() {
+            use std::io::BufRead;
+            write!(w.w, "checkpoint\nget-mark :{mark}\n")?;
+            w.w.flush()?;
+            let mut sha = String::new();
+            answers.read_line(&mut sha)?;
+            let sha = crate::gitmodes::patch_commit(git_dir, sha.trim(), &own, &inherited, headers)?;
+            w.reset(&refname, &sha)?;
+            patched.insert(rc.id, sha);
+        }
     }
     // The branch ends at the last changeset written (a merge's other parents came before it).
-    let last = commit_marks[&nodes.last().expect("nodes").id];
-    w.reset(&refname, &format!(":{last}"))?;
+    let last_id = nodes.last().expect("nodes").id;
+    let last = match patched.get(&last_id) {
+        Some(sha) => sha.clone(),
+        None => format!(":{}", commit_marks[&last_id]),
+    };
+    w.reset(&refname, &last)?;
     w.w.flush()?;
     drop(w);
     let status = child.wait()?;
@@ -579,7 +793,10 @@ async fn write_commits(
         })
         .collect();
     let _ = std::fs::remove_file(&marks_file);
-    Ok(commit_marks.into_iter().filter_map(|(id, m)| Some((id, shas.get(&m)?.clone()))).collect())
+    let mut written: HashMap<Id, String> =
+        commit_marks.into_iter().filter_map(|(id, m)| Some((id, shas.get(&m)?.clone()))).collect();
+    written.extend(patched);
+    Ok(written)
 }
 
 /// Where a mirror has got to: the last changeset exported and the git commit it became.
@@ -825,5 +1042,32 @@ mod tests {
         assert_eq!(redact("https://github.com/acme/fleet.git"), "https://github.com/acme/fleet.git");
         assert_eq!(redact("git@github.com:acme/fleet.git"), "git@github.com:acme/fleet.git");
         assert_eq!(redact("https://github.com/a/b@c"), "https://github.com/a/b@c");
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+
+    #[test]
+    fn a_line_cut_short_by_a_kill_is_ignored() {
+        let id = Id::hash(0, b"x");
+        let sha = "a".repeat(40);
+        let text = format!("1 {sha} {}\n2 {sha} {}\n3 {sha} {}", id.to_hex(), id.to_hex(), &id.to_hex()[..20]);
+        let done = parse_checkpoint(&text);
+        assert_eq!(done.len(), 2);
+        assert_eq!(done[1], (2, sha, id));
+    }
+
+    #[test]
+    fn progress_reads_like_a_person_wrote_it() {
+        assert_eq!(thousands(82542), "82,542");
+        assert_eq!(thousands(999), "999");
+        assert_eq!(eta(30.0), "a minute");
+        assert_eq!(eta(301.0), "6 min");
+        assert_eq!(eta(7200.0), "2.0 h");
+        let p = Progress { total: Some(82542), started: None };
+        assert!(p.line(14000, 0).starts_with("imported 14,000 of 82,542 commits (16%)"));
+        assert_eq!(Progress::default().line(5, 5), "imported 5 commits");
     }
 }

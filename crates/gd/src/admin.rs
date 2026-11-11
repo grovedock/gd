@@ -231,7 +231,7 @@ pub enum LimitsCmd {
 #[derive(Subcommand)]
 pub enum IdentityCmd {
     /// Let an identity sign in as an existing account, e.g. the first administrator:
-    /// `gd admin identity link kabir --provider email --subject kabir@example.com`.
+    /// `gd admin identity link ada --provider email --subject ada@example.com`.
     Link {
         login: String,
         /// `email`, or a sign-in provider's id such as `google`.
@@ -367,7 +367,7 @@ fn explain(s: tonic::Status) -> anyhow::Error {
     if s.code() == tonic::Code::Unimplemented {
         anyhow!("this server hosts one repository; start grovedockd with --platform to manage organisations and tokens")
     } else {
-        anyhow!("{}", s.message())
+        anyhow!(grovedock_adapters::grpc::words(&s))
     }
 }
 

@@ -13,8 +13,8 @@
 <link rel="stylesheet" href="site.css">
 <style>
   .head { padding-block: clamp(2.5rem, 7vw, 5rem) clamp(5rem, 10vw, 7.5rem); }
-  .head h1 { font-size: clamp(2.75rem, 6.4vw, 5rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; margin: 0 0 1.25rem; }
-  .head > p { font-size: clamp(1.1rem, 1.5vw, 1.3rem); color: var(--muted); margin: 0; max-width: 34rem; }
+  .head h1 { font-size: clamp(2.3rem, 4.8vw, 3.75rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.05em; margin: 0 0 1.25rem; }
+  .head > p { font-size: clamp(1.02rem, 1.3vw, 1.12rem); color: var(--muted); margin: 0; max-width: 34rem; }
   .promises { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem 2.5rem; margin-top: 2.5rem; max-width: 50rem; }
   .promises p { margin: 0; padding-left: 1rem; border-left: 2px solid var(--lichen); color: var(--muted); }
   .promises strong { color: var(--ink); }
@@ -64,7 +64,7 @@
 <a class="skip" href="#main">Skip to content</a>
 <div class="band">
 <header class="wrap top">
-  <a class="brand" href="./"><img src="mark.svg" alt="" width="30" height="30">{{NAME}}</a>
+  <a class="brand" href="./" aria-label="Grovedock home"><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><circle cx="31" cy="28" r="11.5" fill="none" stroke="currentColor" stroke-width="6.5"/><path d="M42.5 20V43Q42.5 56 29 56H24" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="42.5" cy="9" r="5" fill="#F0B429"/></svg>grovedock</a>
   <nav aria-label="Main">
     <a href="docs/">Docs</a>
     <a class="wide" href="docs/comparisons/git-vs-gd.html">Benchmarks</a>
@@ -146,6 +146,24 @@
   </form>
 </section>
 
+<section class="wrap sec" aria-labelledby="roi">
+  <h2 id="roi">What it saves you</h2>
+  <form class="calc roi">
+    <div>
+      <label for="ci">CI jobs a day that clone the repository <output for="ci" id="ci-out" class="num">200</output></label>
+      <input type="range" id="ci" min="0" max="5000" step="50" value="200">
+      <label for="lands">Changes agents land a day, many at once <output for="lands" id="lands-out" class="num">300</output></label>
+      <input type="range" id="lands" min="0" max="5000" step="50" value="300">
+      <p class="small muted">From our <a href="docs/comparisons/git-vs-gd.html">measurements</a> on git/git (82,443 commits): a full clone takes 19.1 s with git and 0.46 s with gd; 16 agents landing 80 changes on one branch needed 456 push retries with git and none with gd. <a href="docs/comparisons/run-it-yourself.html">Measure your own.</a></p>
+    </div>
+    <div class="total panel" aria-live="polite">
+      <p>Each month (30 days)</p>
+      <p class="big" id="ci-saved">&nbsp;</p>
+      <p class="small muted" id="retries-saved">&nbsp;</p>
+    </div>
+  </form>
+</section>
+
 <section class="wrap sec" aria-labelledby="faq">
   <h2 id="faq">Questions</h2>
   <div>
@@ -181,7 +199,7 @@
   <div class="wrap">
     <div class="foot">
       <div>
-        <a class="brand" href="./"><img src="mark.svg" alt="" width="26" height="26">{{NAME}}</a>
+        <a class="brand" href="./" aria-label="Grovedock home"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><circle cx="31" cy="28" r="11.5" fill="none" stroke="currentColor" stroke-width="6.5"/><path d="M42.5 20V43Q42.5 56 29 56H24" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="42.5" cy="9" r="5" fill="#F0B429"/></svg>grovedock</a>
         <p>A grove is many trees on one root, like many agents on one history; a dock is where their changes land.</p>
       </div>
       <nav aria-labelledby="f-product"><h2 id="f-product">Product</h2>
@@ -201,7 +219,7 @@
     </div>
     <div class="fine">
       <p>List prices in Indian rupees, excluding GST.</p>
-      <p>gd, its CLI and SDKs are Apache-2.0. {{NAME}} © 2026 Kabir Narang.</p>
+      <p>gd, its CLI and SDKs are Apache-2.0. {{NAME}} © 2026 Grovedock.</p>
     </div>
   </div>
 </footer>
@@ -218,6 +236,19 @@
     $("fit").textContent = p <= +d.freePeople && a <= +d.freeAgents ? "This fits Free." : " ";
   }
   f.addEventListener("input", update);
+  update();
+})();
+(() => {
+  // Measured, docs/comparisons/git-vs-gd.md: full clone 19.13 s vs 0.463 s; 456 retries per 80 contended lands.
+  const $ = (id) => document.getElementById(id), n = (x) => Math.round(x).toLocaleString("en-IN");
+  function update() {
+    const ci = +$("ci").value, lands = +$("lands").value;
+    $("ci-out").value = ci;
+    $("lands-out").value = lands;
+    $("ci-saved").textContent = `${n((ci * 30 * (19.13 - 0.463)) / 3600)} CI hours not spent cloning`;
+    $("retries-saved").textContent = `${n((lands * 30 * 456) / 80)} push retries your agents don't make (fetch, rebase, push again), at the contention we measured.`;
+  }
+  document.querySelector(".roi").addEventListener("input", update);
   update();
 })();
 </script>

@@ -159,6 +159,7 @@ impl JobBox {
         let runner_label = format!("gd.runner={runner}");
         run(&b.docker, &["network", "create", "--label", &label, "--label", &runner_label, &network], &[]).await?;
         let in_container = container.is_some() || mode.image.is_some();
+        let mut hosts: Vec<(String, String)> = Vec::new();
         for (name, s) in services {
             say(&format!("Starting service {name} ({})", s.image));
             b.pull(&s.image, say).await?;
@@ -197,6 +198,8 @@ impl JobBox {
                 }
             }
             b.services[name] = json!({ "id": id, "network": network, "ports": ports });
+            let ip_of = format!("{{{{(index .NetworkSettings.Networks \"{network}\").IPAddress}}}}");
+            hosts.push((name.clone(), run(&b.docker, &["inspect", "--format", &ip_of, &id], &[]).await?));
         }
         if in_container {
             let c = container
@@ -218,6 +221,18 @@ impl JobBox {
             ]);
             if let Some(r) = &mode.runtime {
                 args.extend(["--runtime".into(), r.clone()]);
+            }
+            if mode.runtime.as_deref() == Some("runsc") {
+                // gVisor's network stack doesn't reach Docker's resolver on a job's network
+                // (127.0.0.11), so names resolve through public resolvers, and the job finds its
+                // services in /etc/hosts.
+                // ponytail: fixed public resolvers; a runner --dns flag if someone needs their own.
+                let resolv = dir.join("resolv.conf");
+                std::fs::write(&resolv, "nameserver 1.1.1.1\nnameserver 8.8.8.8\n")?;
+                args.extend(["-v".into(), format!("{}:/etc/resolv.conf:ro", resolv.display())]);
+                for (name, ip) in &hosts {
+                    args.extend(["--add-host".into(), format!("{name}:{ip}")]);
+                }
             }
             if let Some(c) = &mode.cpus {
                 args.extend(["--cpus".into(), c.clone()]);
@@ -248,7 +263,7 @@ impl JobBox {
                 run(&b.docker, &["exec", &id, "sh", "-c", "command -v bash"], &[]).await.is_ok_and(|s| !s.is_empty());
             b.node = run(
                 &b.docker,
-                &["exec", &id, "sh", "-c", "node -e 'process.exit(+process.versions.node.split(\".\")[0] < 18)'"],
+                &["exec", &id, "sh", "-c", "node -e 'process.exit(+process.versions.node.split(\".\")[0] < 24)'"],
                 &[],
             )
             .await
@@ -373,6 +388,24 @@ async fn clean(docker: &Path, label: &str) {
             args.extend(ids.lines());
             let _ = run(docker, &args, &[]).await;
         }
+    }
+}
+
+/// Whether Docker answers now (a few seconds), for a runner about to take container jobs.
+pub async fn check_docker() -> Result<()> {
+    let docker = docker_path().context("docker isn't installed (or not on PATH); jobs run in containers need it")?;
+    let cmd = tokio::process::Command::new(&docker)
+        .args(["version", "--format", "{{.Server.Version}}"])
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .output();
+    match tokio::time::timeout(Duration::from_secs(15), cmd).await {
+        Ok(Ok(o)) if o.status.success() => Ok(()),
+        Ok(Ok(o)) => {
+            bail!("Docker isn't running ({}); start it, then the runner", String::from_utf8_lossy(&o.stderr).trim())
+        }
+        Ok(Err(e)) => Err(e).context("running docker"),
+        Err(_) => bail!("Docker didn't answer in 15 seconds; start Docker (Docker Desktop on a Mac), then the runner"),
     }
 }
 

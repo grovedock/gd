@@ -1,9 +1,9 @@
 # Grovedock Terms of Service
 
 **Effective date:** 19 October 2026
-**Last updated:** 19 October 2026
+**Last updated:** 12 November 2026
 
-These terms are an agreement between you and **Kabir Narang**, a sole proprietorship based in India, trading as "Grovedock" ("Grovedock", "we", "us"). Our address is [REGISTERED ADDRESS] and you can reach us at grievance@grovedock.com.
+These terms are an agreement between you and **Kabir Narang**, a sole proprietorship based in Karnal, Haryana, India, trading as "Grovedock" ("Grovedock", "we", "us"). You can reach us at grievance@grovedock.com.
 
 They cover **Grovedock**, our hosted service at https://cloud.grovedock.com (the "Service"). They do not cover gd, the open-source protocol, command-line tool and SDKs, which you may use under the Apache-2.0 licence included with them (see section 14), or Grovedock Enterprise on your own servers, which is covered by its own agreement.
 
@@ -75,12 +75,13 @@ We treat your Customer Content as confidential. Specifically:
 
 We may use aggregated, anonymised usage statistics that do not contain your code or identify you (for example "number of lands per day across the Service") to run and improve the Service.
 
-## 7. Service levels and beta
+## 7. Service levels, beta features and backups
 
 - Grovedock is offered on a **best-effort basis**. We aim for high availability but **we do not currently offer a service level agreement (SLA)**, uptime guarantee or service credits.
 - We may carry out planned maintenance. We will try to give notice of planned downtime by email and on https://grovedock.com.
 - Some features may be labelled **"beta", "preview" or "experimental"**. They may change, break or be removed, and are provided "as is". Do not rely on beta features for critical work.
-- **Keep your own copies of important code.** Grovedock is source control: you can and should keep clones or exports of your repositories outside the Service.
+- **Backups.** We copy every repository and account record off-site, in India, every night, keep those copies for up to 14 days, and test restoring from them every week. If our server's storage is lost, changes made since the last nightly copy (up to one day) may be lost.
+- **Keep your own copies of important code.** Grovedock is source control: you can and should keep clones or exports of your repositories outside the Service. **Git host sync** (repository settings) keeps a copy on your git host after every land, with the same commit ids.
 
 ## 8. Plans and pricing
 
@@ -166,7 +167,7 @@ You will defend and compensate us against third-party claims (and resulting reas
 
 ## 18. Governing law and disputes
 
-These terms are governed by the laws of **India**. Before going to court, both parties will try in good faith to resolve a dispute by email for 30 days. Subject to that, the courts at **Karnal, Haryana, India** have exclusive jurisdiction.] This does not stop a consumer from using a consumer forum where the law allows.
+These terms are governed by the laws of **India**. Before going to court, both parties will try in good faith to resolve a dispute by email for 30 days. Subject to that, the courts at **Karnal, Haryana, India** have exclusive jurisdiction. This does not stop a consumer from using a consumer forum where the law allows.
 
 ## 19. Changes to these terms
 
@@ -174,10 +175,10 @@ We may update these terms. For material changes we will email account owners and
 
 ## 20. General
 
-- **Notices** to you go to your account email; notices to us go to grievance@grovedock.com and [REGISTERED ADDRESS].
+- **Notices** to you go to your account email; notices to us go to grievance@grovedock.com.
 - **Assignment:** you may not transfer these terms without our consent; we may transfer them to a successor of the business (for example if the sole proprietorship is converted into a company), with notice to you.
 - **Force majeure:** neither party is liable for delays caused by events beyond reasonable control (except payment obligations).
 - **Entire agreement:** these terms, the Privacy Policy, the Refund and Cancellation Policy, the Delivery Policy and (for business customers) the DPA are the whole agreement for the Service. If they conflict, the DPA wins on personal-data matters.
 - **Severability / no waiver:** if a clause is unenforceable the rest still applies; not enforcing a clause is not a waiver.
 
-**Contact:** Kabir Narang, [REGISTERED ADDRESS], grievance@grovedock.com. See also [Contact](./contact.md).
+**Contact:** Kabir Narang, Karnal, Haryana, India, grievance@grovedock.com. See also [Contact](./contact.md).

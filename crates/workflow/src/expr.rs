@@ -27,7 +27,25 @@ pub struct Scope {
 }
 
 impl Scope {
+    /// Adds a context. `github` comes with `grovedock`, the same context in Grovedock's words
+    /// (`grovedock.event_name` is `change_request` where `github.event_name` is `pull_request`), so
+    /// a workflow written for Grovedock needn't name GitHub.
     pub fn with(mut self, name: &str, value: Value) -> Self {
+        let mut value = value;
+        if name == "github" {
+            let mut own = value.clone();
+            if let Some(event) = value.get("grovedock_event").filter(|e| e.as_str().is_some_and(|e| !e.is_empty())) {
+                own["event_name"] = event.clone();
+            }
+            // The job's Grovedock token is grovedock.token only.
+            if let Some(t) = value.as_object_mut().and_then(|o| o.remove("grovedock_token")) {
+                own["token"] = t;
+                if let Some(o) = own.as_object_mut() {
+                    o.remove("grovedock_token");
+                }
+            }
+            self.contexts.insert("grovedock".to_owned(), own);
+        }
         self.contexts.insert(name.to_owned(), value);
         self
     }
@@ -669,6 +687,22 @@ mod tests {
             .with("github", json!({"ref": "refs/heads/main", "event_name": "push", "actor": "asha"}))
             .with("matrix", json!({"os": "linux", "node": 20}))
             .with("steps", json!({"build": {"outcome": "success", "outputs": {"v": "1.2"}}}))
+    }
+
+    #[test]
+    fn grovedock_is_github_in_grovedock_s_words() {
+        let s = Scope::default()
+            .with("github", json!({"sha": "abc", "event_name": "pull_request", "grovedock_event": "change_request"}));
+        let e = |x: &str| to_text(&evaluate(x, &s).unwrap());
+        assert_eq!(e("grovedock.sha"), "abc");
+        assert_eq!(e("grovedock.event_name"), "change_request");
+        assert_eq!(e("github.event_name"), "pull_request");
+        let s = Scope::default().with("github", json!({"grovedock_token": "t"}));
+        let e = |x: &str| to_text(&evaluate(x, &s).unwrap());
+        assert_eq!(
+            (e("grovedock.token"), e("github.token"), e("github.grovedock_token")),
+            ("t".into(), "".into(), "".into())
+        );
     }
 
     #[test]

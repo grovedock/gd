@@ -1,6 +1,7 @@
-//! Tokens saved by `gd login`, one per server, in `~/.config/gd/credentials.json`
-//! (`$XDG_CONFIG_HOME/gd` when set; under the user profile on Windows). The file is readable
-//! by its owner only. A token given with `--token` or `GD_TOKEN` always comes first.
+//! Tokens saved by `gd login`, one per server: in the system keychain on macOS and Windows,
+//! otherwise in `~/.config/gd/credentials.json` (`$XDG_CONFIG_HOME/gd` when set; under the user
+//! profile on Windows), readable by its owner only. A token given with `--token` or `GD_TOKEN`
+//! always comes first; a token in the file from an older gd still works.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -106,7 +107,80 @@ pub fn remove(path: &Path, server: &str) -> Result<Option<String>> {
 
 /// The token to use for `server`: the one given (`--token`, `GD_TOKEN`), else the saved one.
 pub fn resolve(given: Option<&str>, server: &str) -> Option<String> {
-    given.map(str::to_owned).or_else(|| load(&path()?, server))
+    given.map(str::to_owned).or_else(|| stored(server))
+}
+
+/// The OS keychain: macOS Keychain and Windows Credential Manager, one entry per server origin
+/// under the service `gd`, like git's credential helpers. Elsewhere there is none and the file
+/// is used.
+/// ponytail: Linux Secret Service left out (it needs libdbus in release builds and is often
+/// missing on servers and CI); add keyring's `sync-secret-service` when someone asks.
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+mod keychain {
+    fn entry(origin: &str) -> Option<keyring::Entry> {
+        keyring::Entry::new("gd", origin).ok()
+    }
+    pub fn get(origin: &str) -> Option<String> {
+        entry(origin)?.get_password().ok()
+    }
+    pub fn set(origin: &str, token: &str) -> bool {
+        entry(origin).is_some_and(|e| e.set_password(token).is_ok())
+    }
+    pub fn delete(origin: &str) -> Option<String> {
+        let e = entry(origin)?;
+        let old = e.get_password().ok();
+        let _ = e.delete_credential();
+        old
+    }
+}
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod keychain {
+    pub fn get(_: &str) -> Option<String> {
+        None
+    }
+    pub fn set(_: &str, _: &str) -> bool {
+        false
+    }
+    pub fn delete(_: &str) -> Option<String> {
+        None
+    }
+}
+
+/// `GD_NO_KEYCHAIN` set: keep tokens in the file only (tests, shared machines).
+fn keychain_on() -> bool {
+    std::env::var_os("GD_NO_KEYCHAIN").is_none()
+}
+
+/// Saves `server`'s token in the keychain when there is one, else in the file. Returns where.
+pub fn store(server: &str, token: &str) -> Result<String> {
+    let origin = key(server);
+    if keychain_on() && keychain::set(&origin, token) {
+        // One place only: drop a copy an older gd left in the file.
+        if let Some(p) = path() {
+            let _ = remove(&p, &origin);
+        }
+        return Ok("the system keychain".into());
+    }
+    let p = path().context("no home directory to keep the token in; set GD_TOKEN instead")?;
+    save(&p, &origin, token)?;
+    Ok(p.display().to_string())
+}
+
+/// `server`'s saved token: the keychain's, else the file's (sign-ins from an older gd).
+pub fn stored(server: &str) -> Option<String> {
+    let origin = key(server);
+    keychain_on().then(|| keychain::get(&origin)).flatten().or_else(|| load(&path()?, &origin))
+}
+
+/// Forgets `server`'s token everywhere it was kept; returns it if there was one.
+pub fn forget(server: &str) -> Result<Option<String>> {
+    let origin = key(server);
+    let from_keychain = if keychain_on() { keychain::delete(&origin) } else { None };
+    let from_file = match path() {
+        Some(p) => remove(&p, &origin)?,
+        None => None,
+    };
+    Ok(from_keychain.or(from_file))
 }
 
 #[cfg(test)]

@@ -1085,7 +1085,15 @@ type LandRequest struct {
 	// As git pushes: the ref moves to the changeset as it is, only if the ref's head is one of
 	// its ancestors (or the ref doesn't exist); every changeset it brings is checked as a land
 	// would be. Nothing is rebased; otherwise refused ("fetch first").
-	FastForward   bool `protobuf:"varint,3,opt,name=fast_forward,json=fastForward,proto3" json:"fast_forward,omitempty"`
+	FastForward bool `protobuf:"varint,3,opt,name=fast_forward,json=fastForward,proto3" json:"fast_forward,omitempty"`
+	// Protocol 1.2: a small change in the same call, instead of Objects/Put, Changesets/Create
+	// and Land one after another (an agent's usual edit, three round trips to one). The objects
+	// are stored and `create` made exactly as those calls would, with the same checks, then
+	// landed; `changeset` is left empty. At most 1,024 objects and 4 MiB. A server before 1.2
+	// ignores these fields and refuses the empty `changeset` before doing anything, so a client
+	// can then make the three calls instead.
+	Objects       []*ObjectPayload        `protobuf:"bytes,4,rep,name=objects,proto3" json:"objects,omitempty"`
+	Create        *CreateChangesetRequest `protobuf:"bytes,5,opt,name=create,proto3" json:"create,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1141,11 +1149,27 @@ func (x *LandRequest) GetFastForward() bool {
 	return false
 }
 
+func (x *LandRequest) GetObjects() []*ObjectPayload {
+	if x != nil {
+		return x.Objects
+	}
+	return nil
+}
+
+func (x *LandRequest) GetCreate() *CreateChangesetRequest {
+	if x != nil {
+		return x.Create
+	}
+	return nil
+}
+
 type LandResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Landed        []byte                 `protobuf:"bytes,1,opt,name=landed,proto3" json:"landed,omitempty"`
-	Rebased       bool                   `protobuf:"varint,2,opt,name=rebased,proto3" json:"rebased,omitempty"`
-	Attempts      uint32                 `protobuf:"varint,3,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Landed   []byte                 `protobuf:"bytes,1,opt,name=landed,proto3" json:"landed,omitempty"`
+	Rebased  bool                   `protobuf:"varint,2,opt,name=rebased,proto3" json:"rebased,omitempty"`
+	Attempts uint32                 `protobuf:"varint,3,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	// The change `create` made (protocol 1.2), before any rebase onto the ref.
+	Created       []byte `protobuf:"bytes,4,opt,name=created,proto3" json:"created,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1199,6 +1223,13 @@ func (x *LandResponse) GetAttempts() uint32 {
 		return x.Attempts
 	}
 	return 0
+}
+
+func (x *LandResponse) GetCreated() []byte {
+	if x != nil {
+		return x.Created
+	}
+	return nil
 }
 
 type LogRequest struct {
@@ -3134,15 +3165,18 @@ const file_gd_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\fR\x02id\".\n" +
 	"\aRefList\x12#\n" +
-	"\x04refs\x18\x01 \x03(\v2\x0f.gd.v1.RefEntryR\x04refs\"`\n" +
+	"\x04refs\x18\x01 \x03(\v2\x0f.gd.v1.RefEntryR\x04refs\"\xc7\x01\n" +
 	"\vLandRequest\x12\x10\n" +
 	"\x03ref\x18\x01 \x01(\tR\x03ref\x12\x1c\n" +
 	"\tchangeset\x18\x02 \x01(\fR\tchangeset\x12!\n" +
-	"\ffast_forward\x18\x03 \x01(\bR\vfastForward\"\\\n" +
+	"\ffast_forward\x18\x03 \x01(\bR\vfastForward\x12.\n" +
+	"\aobjects\x18\x04 \x03(\v2\x14.gd.v1.ObjectPayloadR\aobjects\x125\n" +
+	"\x06create\x18\x05 \x01(\v2\x1d.gd.v1.CreateChangesetRequestR\x06create\"v\n" +
 	"\fLandResponse\x12\x16\n" +
 	"\x06landed\x18\x01 \x01(\fR\x06landed\x12\x18\n" +
 	"\arebased\x18\x02 \x01(\bR\arebased\x12\x1a\n" +
-	"\battempts\x18\x03 \x01(\rR\battempts\"H\n" +
+	"\battempts\x18\x03 \x01(\rR\battempts\x12\x18\n" +
+	"\acreated\x18\x04 \x01(\fR\acreated\"H\n" +
 	"\n" +
 	"LogRequest\x12\x10\n" +
 	"\x03rev\x18\x01 \x01(\tR\x03rev\x12\x12\n" +
@@ -3387,72 +3421,74 @@ var file_gd_proto_depIdxs = []int32{
 	5,  // 1: gd.v1.CreateChangesetRequest.changes:type_name -> gd.v1.FileChange
 	9,  // 2: gd.v1.CreateChangesetRequest.parent_refs:type_name -> gd.v1.ParentRef
 	16, // 3: gd.v1.RefList.refs:type_name -> gd.v1.RefEntry
-	22, // 4: gd.v1.BlameResponse.lines:type_name -> gd.v1.BlameLine
-	52, // 5: gd.v1.BlameResponse.authors:type_name -> gd.v1.BlameResponse.AuthorsEntry
-	5,  // 6: gd.v1.DiffResponse.changes:type_name -> gd.v1.FileChange
-	32, // 7: gd.v1.ListDirResponse.entries:type_name -> gd.v1.DirEntry
-	40, // 8: gd.v1.CodeHit.lines:type_name -> gd.v1.CodeLine
-	41, // 9: gd.v1.SearchCodeResponse.hits:type_name -> gd.v1.CodeHit
-	44, // 10: gd.v1.FindSymbolResponse.symbols:type_name -> gd.v1.SymbolHit
-	50, // 11: gd.v1.LockList.locks:type_name -> gd.v1.LockInfo
-	23, // 12: gd.v1.BlameResponse.AuthorsEntry.value:type_name -> gd.v1.LineAuthor
-	2,  // 13: gd.v1.Objects.Get:input_type -> gd.v1.IdList
-	3,  // 14: gd.v1.Objects.Put:input_type -> gd.v1.ObjectPayload
-	2,  // 15: gd.v1.Objects.Missing:input_type -> gd.v1.IdList
-	8,  // 16: gd.v1.Changesets.Create:input_type -> gd.v1.CreateChangesetRequest
-	8,  // 17: gd.v1.Changesets.CreateMany:input_type -> gd.v1.CreateChangesetRequest
-	11, // 18: gd.v1.Changesets.Get:input_type -> gd.v1.ResolveRequest
-	12, // 19: gd.v1.Refs.Get:input_type -> gd.v1.RefName
-	14, // 20: gd.v1.Refs.CompareAndSwap:input_type -> gd.v1.CasRequest
-	0,  // 21: gd.v1.Refs.List:input_type -> gd.v1.Empty
-	18, // 22: gd.v1.Land.Land:input_type -> gd.v1.LandRequest
-	20, // 23: gd.v1.History.Log:input_type -> gd.v1.LogRequest
-	21, // 24: gd.v1.History.Blame:input_type -> gd.v1.BlameRequest
-	25, // 25: gd.v1.History.AttachGitAiNote:input_type -> gd.v1.AttachGitAiNoteRequest
-	1,  // 26: gd.v1.History.GitAiNote:input_type -> gd.v1.IdMsg
-	27, // 27: gd.v1.Diff.Diff:input_type -> gd.v1.DiffRequest
-	29, // 28: gd.v1.MergeBase.MergeBase:input_type -> gd.v1.MergeBaseRequest
-	39, // 29: gd.v1.CodeSearch.SearchCode:input_type -> gd.v1.SearchCodeRequest
-	43, // 30: gd.v1.CodeSearch.FindSymbol:input_type -> gd.v1.FindSymbolRequest
-	31, // 31: gd.v1.Browse.ListDir:input_type -> gd.v1.BrowseRequest
-	31, // 32: gd.v1.Browse.ReadFile:input_type -> gd.v1.BrowseRequest
-	35, // 33: gd.v1.Browse.Find:input_type -> gd.v1.FindRequest
-	37, // 34: gd.v1.Browse.Checkout:input_type -> gd.v1.CheckoutRequest
-	0,  // 35: gd.v1.Access.WhoAmI:input_type -> gd.v1.Empty
-	47, // 36: gd.v1.Locks.Lock:input_type -> gd.v1.LockRequest
-	48, // 37: gd.v1.Locks.Unlock:input_type -> gd.v1.UnlockRequest
-	49, // 38: gd.v1.Locks.List:input_type -> gd.v1.ListLocksRequest
-	3,  // 39: gd.v1.Objects.Get:output_type -> gd.v1.ObjectPayload
-	4,  // 40: gd.v1.Objects.Put:output_type -> gd.v1.PutObjectsResponse
-	2,  // 41: gd.v1.Objects.Missing:output_type -> gd.v1.IdList
-	6,  // 42: gd.v1.Changesets.Create:output_type -> gd.v1.ChangesetInfo
-	10, // 43: gd.v1.Changesets.CreateMany:output_type -> gd.v1.CreatedChangeset
-	6,  // 44: gd.v1.Changesets.Get:output_type -> gd.v1.ChangesetInfo
-	13, // 45: gd.v1.Refs.Get:output_type -> gd.v1.RefValue
-	15, // 46: gd.v1.Refs.CompareAndSwap:output_type -> gd.v1.CasResponse
-	17, // 47: gd.v1.Refs.List:output_type -> gd.v1.RefList
-	19, // 48: gd.v1.Land.Land:output_type -> gd.v1.LandResponse
-	6,  // 49: gd.v1.History.Log:output_type -> gd.v1.ChangesetInfo
-	24, // 50: gd.v1.History.Blame:output_type -> gd.v1.BlameResponse
-	0,  // 51: gd.v1.History.AttachGitAiNote:output_type -> gd.v1.Empty
-	26, // 52: gd.v1.History.GitAiNote:output_type -> gd.v1.GitAiNoteResponse
-	28, // 53: gd.v1.Diff.Diff:output_type -> gd.v1.DiffResponse
-	30, // 54: gd.v1.MergeBase.MergeBase:output_type -> gd.v1.MergeBaseResponse
-	42, // 55: gd.v1.CodeSearch.SearchCode:output_type -> gd.v1.SearchCodeResponse
-	45, // 56: gd.v1.CodeSearch.FindSymbol:output_type -> gd.v1.FindSymbolResponse
-	33, // 57: gd.v1.Browse.ListDir:output_type -> gd.v1.ListDirResponse
-	34, // 58: gd.v1.Browse.ReadFile:output_type -> gd.v1.ReadFileResponse
-	36, // 59: gd.v1.Browse.Find:output_type -> gd.v1.FindResponse
-	38, // 60: gd.v1.Browse.Checkout:output_type -> gd.v1.CheckoutPiece
-	46, // 61: gd.v1.Access.WhoAmI:output_type -> gd.v1.WhoAmIResponse
-	50, // 62: gd.v1.Locks.Lock:output_type -> gd.v1.LockInfo
-	0,  // 63: gd.v1.Locks.Unlock:output_type -> gd.v1.Empty
-	51, // 64: gd.v1.Locks.List:output_type -> gd.v1.LockList
-	39, // [39:65] is the sub-list for method output_type
-	13, // [13:39] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	3,  // 4: gd.v1.LandRequest.objects:type_name -> gd.v1.ObjectPayload
+	8,  // 5: gd.v1.LandRequest.create:type_name -> gd.v1.CreateChangesetRequest
+	22, // 6: gd.v1.BlameResponse.lines:type_name -> gd.v1.BlameLine
+	52, // 7: gd.v1.BlameResponse.authors:type_name -> gd.v1.BlameResponse.AuthorsEntry
+	5,  // 8: gd.v1.DiffResponse.changes:type_name -> gd.v1.FileChange
+	32, // 9: gd.v1.ListDirResponse.entries:type_name -> gd.v1.DirEntry
+	40, // 10: gd.v1.CodeHit.lines:type_name -> gd.v1.CodeLine
+	41, // 11: gd.v1.SearchCodeResponse.hits:type_name -> gd.v1.CodeHit
+	44, // 12: gd.v1.FindSymbolResponse.symbols:type_name -> gd.v1.SymbolHit
+	50, // 13: gd.v1.LockList.locks:type_name -> gd.v1.LockInfo
+	23, // 14: gd.v1.BlameResponse.AuthorsEntry.value:type_name -> gd.v1.LineAuthor
+	2,  // 15: gd.v1.Objects.Get:input_type -> gd.v1.IdList
+	3,  // 16: gd.v1.Objects.Put:input_type -> gd.v1.ObjectPayload
+	2,  // 17: gd.v1.Objects.Missing:input_type -> gd.v1.IdList
+	8,  // 18: gd.v1.Changesets.Create:input_type -> gd.v1.CreateChangesetRequest
+	8,  // 19: gd.v1.Changesets.CreateMany:input_type -> gd.v1.CreateChangesetRequest
+	11, // 20: gd.v1.Changesets.Get:input_type -> gd.v1.ResolveRequest
+	12, // 21: gd.v1.Refs.Get:input_type -> gd.v1.RefName
+	14, // 22: gd.v1.Refs.CompareAndSwap:input_type -> gd.v1.CasRequest
+	0,  // 23: gd.v1.Refs.List:input_type -> gd.v1.Empty
+	18, // 24: gd.v1.Land.Land:input_type -> gd.v1.LandRequest
+	20, // 25: gd.v1.History.Log:input_type -> gd.v1.LogRequest
+	21, // 26: gd.v1.History.Blame:input_type -> gd.v1.BlameRequest
+	25, // 27: gd.v1.History.AttachGitAiNote:input_type -> gd.v1.AttachGitAiNoteRequest
+	1,  // 28: gd.v1.History.GitAiNote:input_type -> gd.v1.IdMsg
+	27, // 29: gd.v1.Diff.Diff:input_type -> gd.v1.DiffRequest
+	29, // 30: gd.v1.MergeBase.MergeBase:input_type -> gd.v1.MergeBaseRequest
+	39, // 31: gd.v1.CodeSearch.SearchCode:input_type -> gd.v1.SearchCodeRequest
+	43, // 32: gd.v1.CodeSearch.FindSymbol:input_type -> gd.v1.FindSymbolRequest
+	31, // 33: gd.v1.Browse.ListDir:input_type -> gd.v1.BrowseRequest
+	31, // 34: gd.v1.Browse.ReadFile:input_type -> gd.v1.BrowseRequest
+	35, // 35: gd.v1.Browse.Find:input_type -> gd.v1.FindRequest
+	37, // 36: gd.v1.Browse.Checkout:input_type -> gd.v1.CheckoutRequest
+	0,  // 37: gd.v1.Access.WhoAmI:input_type -> gd.v1.Empty
+	47, // 38: gd.v1.Locks.Lock:input_type -> gd.v1.LockRequest
+	48, // 39: gd.v1.Locks.Unlock:input_type -> gd.v1.UnlockRequest
+	49, // 40: gd.v1.Locks.List:input_type -> gd.v1.ListLocksRequest
+	3,  // 41: gd.v1.Objects.Get:output_type -> gd.v1.ObjectPayload
+	4,  // 42: gd.v1.Objects.Put:output_type -> gd.v1.PutObjectsResponse
+	2,  // 43: gd.v1.Objects.Missing:output_type -> gd.v1.IdList
+	6,  // 44: gd.v1.Changesets.Create:output_type -> gd.v1.ChangesetInfo
+	10, // 45: gd.v1.Changesets.CreateMany:output_type -> gd.v1.CreatedChangeset
+	6,  // 46: gd.v1.Changesets.Get:output_type -> gd.v1.ChangesetInfo
+	13, // 47: gd.v1.Refs.Get:output_type -> gd.v1.RefValue
+	15, // 48: gd.v1.Refs.CompareAndSwap:output_type -> gd.v1.CasResponse
+	17, // 49: gd.v1.Refs.List:output_type -> gd.v1.RefList
+	19, // 50: gd.v1.Land.Land:output_type -> gd.v1.LandResponse
+	6,  // 51: gd.v1.History.Log:output_type -> gd.v1.ChangesetInfo
+	24, // 52: gd.v1.History.Blame:output_type -> gd.v1.BlameResponse
+	0,  // 53: gd.v1.History.AttachGitAiNote:output_type -> gd.v1.Empty
+	26, // 54: gd.v1.History.GitAiNote:output_type -> gd.v1.GitAiNoteResponse
+	28, // 55: gd.v1.Diff.Diff:output_type -> gd.v1.DiffResponse
+	30, // 56: gd.v1.MergeBase.MergeBase:output_type -> gd.v1.MergeBaseResponse
+	42, // 57: gd.v1.CodeSearch.SearchCode:output_type -> gd.v1.SearchCodeResponse
+	45, // 58: gd.v1.CodeSearch.FindSymbol:output_type -> gd.v1.FindSymbolResponse
+	33, // 59: gd.v1.Browse.ListDir:output_type -> gd.v1.ListDirResponse
+	34, // 60: gd.v1.Browse.ReadFile:output_type -> gd.v1.ReadFileResponse
+	36, // 61: gd.v1.Browse.Find:output_type -> gd.v1.FindResponse
+	38, // 62: gd.v1.Browse.Checkout:output_type -> gd.v1.CheckoutPiece
+	46, // 63: gd.v1.Access.WhoAmI:output_type -> gd.v1.WhoAmIResponse
+	50, // 64: gd.v1.Locks.Lock:output_type -> gd.v1.LockInfo
+	0,  // 65: gd.v1.Locks.Unlock:output_type -> gd.v1.Empty
+	51, // 66: gd.v1.Locks.List:output_type -> gd.v1.LockList
+	41, // [41:67] is the sub-list for method output_type
+	15, // [15:41] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_gd_proto_init() }

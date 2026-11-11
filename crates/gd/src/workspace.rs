@@ -60,6 +60,8 @@ struct IndexFile {
     entries: Vec<IndexEntry>,
     #[prost(bool, tag = "4")]
     base_landed: bool,
+    #[prost(bool, tag = "5")]
+    parent_landed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,6 +86,9 @@ pub struct Workspace {
     /// True when `base` was landed (possibly rebased server-side), so syncing away from it
     /// cannot lose unlanded work.
     pub base_landed: bool,
+    /// True when `base` is a commit made here directly on landed history, so it's the only
+    /// change to land: landing then needs no round trips to find what's unlanded.
+    pub parent_landed: bool,
     pub index: BTreeMap<String, IndexEntry>,
     written_ns: i64,
 }
@@ -208,6 +213,7 @@ impl Workspace {
             config,
             base,
             base_landed: index.base_landed,
+            parent_landed: index.parent_landed,
             index: index.entries.into_iter().map(|e| (e.path.clone(), e)).collect(),
             written_ns: index.written_ns,
         })
@@ -224,6 +230,7 @@ impl Workspace {
             config,
             base: None,
             base_landed: true,
+            parent_landed: false,
             index: BTreeMap::new(),
             written_ns: 0,
         };
@@ -246,6 +253,7 @@ impl Workspace {
             written_ns: now_ns(),
             entries: self.index.values().cloned().collect(),
             base_landed: self.base_landed,
+            parent_landed: self.parent_landed,
         };
         write("index", &index.encode_to_vec())
     }

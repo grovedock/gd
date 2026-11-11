@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install the latest Grovedock release (gd + grovedockd) for macOS or Linux.
+# Install the latest gd release (gd + git-remote-gd) for macOS or Linux.
 #
 #   curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
 #
@@ -53,13 +53,15 @@ fi
 
 tar xzf "$tmp/$name.tar.gz" -C "$tmp"
 mkdir -p "$DEST"
+installed=""
 for bin in gd grovedockd git-remote-gd; do
-  # Releases before v1.1 do not include the git bridge.
+  # Releases before v1.1 do not include the git bridge; grovedockd is not in releases since 4.0.
   [ -f "$tmp/$name/$bin" ] || continue
   install -m 0755 "$tmp/$name/$bin" "$DEST/$bin"
+  installed="$installed${installed:+, }$bin"
 done
 
-echo "Installed Grovedock $version to $DEST (gd, grovedockd, git-remote-gd)"
+echo "Installed Grovedock $version to $DEST ($installed)"
 case ":$PATH:" in
   *":$DEST:"*) ;;
   *) echo "Add $DEST to your PATH, for example: export PATH=\"$DEST:\$PATH\"" ;;

@@ -6,6 +6,66 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.0.5] - 2026-11-12
+
+### Security
+- Dependencies past ten RustSec advisories published since 4.0.4: the bundled SQLite (RUSTSEC-2026-0459, via rusqlite 0.41), zstd and zstd-safe (memory-safety fixes), rmcp (the MCP server: SSRF filter, unbounded buffering and cache), pulldown-cmark and rustix.
+
+### Added
+- `gd login` keeps the token in the system keychain on macOS (Keychain) and Windows (Credential Manager), one entry per server under the service `gd`, apart from git's own credentials. Linux keeps the owner-only file. Tokens saved by an older gd still work, and `GD_NO_KEYCHAIN=1` keeps everything in the file. `gd auth token` prints the token gd would use, for scripts.
+- The organisation's **Plan and usage** tab shows hosted runner minutes against the plan's limit.
+- Pricing: what Grovedock saves you, from measured numbers. Docs: run the GitHub comparison yourself.
+
+### Changed
+- Errors say what to do: a refusal says how to get access, and a lost connection says to check it (the `--web-origins` hint shows only when the app talks to another server). Repository settings and webhooks use the same form layout as the rest of the app.
+
+### Fixed
+- Production's nightly backup could deadlock on a full disk (old snapshots were pruned only after a new one succeeded); it now prunes first, keeps the archive under a free-tier cap, and restores from nightlies when no replica is configured.
+- Install instructions that didn't work: the Homebrew formula is `kabirnarang39/tap/grovedock`, and `cargo install` builds from the gd repository until the crate is on crates.io. `install.sh` names only the tools it installed (it listed `grovedockd`, which releases don't carry).
+
+## [4.0.4] - 2026-10-23
+
+### Added
+- **CI written for Grovedock reads like Grovedock.** `.grovedock/workflows` can say `grovedock.sha`, `$GROVEDOCK_OUTPUT`, `uses: grovedock/checkout` and `secrets.GROVEDOCK_TOKEN` (the job's own read-only token); the GitHub names keep working for imported workflows. A repository with `.grovedock/workflows` runs only that folder here, so one kept on GitHub too runs each folder on its own host.
+- **Protocol 1.2: an agent's edit lands in one call.** `Land.Land` can bring the change's files and the change itself, so `gd commit --land` makes one round trip instead of three. A server before 1.2 is detected and the three calls are used. [LAND-6]
+- **git histories come back exactly.** Import records what `git fast-export` drops or alters (2005-era file modes such as `100664`, author names that aren't UTF-8, `mergetag` and `change-id` headers), and export puts it back. git/git's 82,542 commits keep every commit id through import and export.
+
+### Changed
+- `gd commit --land` from India: 642 ms → 472 ms per change before protocol 1.2, with no round trips to rediscover what's unlanded and small commits sent without asking what's missing.
+- Importing large histories is about 27% faster (git/git: 323 s → 236 s on a laptop): new trees and changes stay in memory for the next change, and SQLite's page cache per connection drops to 16 MiB (`GD_SQLITE_CACHE_MB`).
+- Checkout redesigned like the sign-in page. Razorpay's refusals say what to do (above the payment limit: pay monthly, fewer people now, or an invoice), and someone signed in as a non-administrator is told which account they're using.
+- Setting up an organisation: one sidebar, the steps on a trunk across the top, calmer type.
+- Activity ticks are a picture of the activity rather than tiny buttons (WCAG 2.2 target size); links in text are underlined; a long command can be scrolled by keyboard.
+
+### Fixed
+- Runners in a sandbox (gVisor) couldn't resolve names on a job's network: every download in such a job hung. They now resolve through public resolvers, and find the job's services by name.
+- A change request's run checked out an empty folder (`gd clone` took the change's id for a branch name).
+- JavaScript actions run on Node 24, as GitHub's runners do; pnpm's setup action failed on Node 20.
+- Signed commits keep their ids through import and git views with any git: older git (before 2.48) strips signatures, and newer fast-import wants the signature's format named. A git view whose fetch fails now rebuilds itself instead of staying empty.
+- A step stopped by the job's time limit says the job reached its limit, not "Timed out after 1 minutes"; an artifact that won't unpack says what came back.
+- A token limited to some repositories, or below Admin, is told that, not that its owner isn't an administrator.
+- The runner image is Ubuntu 24.04 with current git, apt's package lists and Node 24; runner setup follows gVisor's new download.
+- An interrupted `gd import-git` could lose its resume point when the same history was imported to another server; each destination keeps its own.
+- A self-hosted runner on a machine where Docker is installed but not running waited up to 15 minutes before taking jobs; it now waits at most 10 seconds, and in container mode says to start Docker.
+
+## [4.0.3] - 2026-10-22
+
+### Added
+- **Keep a git host in sync.** Repository settings → *Git host sync*: after each land on a branch, the same branch on your git host gets the same commits, so CI and people there keep working while agents land here. It only fast-forwards: commits pushed to the host directly stop the sync with a clear message instead of being overwritten. The host's token is kept encrypted, used only through git's credential prompt, and never shown again.
+- **Connect an agent** (`/connect`): pick Claude Code, Codex, Cursor, VS Code or Gemini, copy one snippet with a scoped token, and the page shows when the agent first calls in.
+- `gd import-git` shows progress (`imported 14,000 of 82,542 commits (16%), 230 a second, about 5 min to go`) and, when stopped partway, carries on from the last batch the server has.
+- Plans and payments can be turned on with one command on the server (`set-billing.sh`): Razorpay test keys now, live keys after KYC.
+
+### Changed
+- One sign-in page for the console and the server, redesigned; the type across the website and console is a size smaller.
+- Repository settings: webhooks and git host sync laid out like the other sections.
+- CLI errors say what happened and what to do, not the raw gRPC status.
+- The MCP gateway answers a missing or refused token with 401 and `WWW-Authenticate: Bearer`, as MCP authorization has it, so clients ask for a token instead of failing on their first tool call.
+
+### Fixed
+- A server with many repositories no longer grows past its memory: every repository's caches share one budget (`GD_CACHE_MB`, by default a quarter of the machine's memory) instead of 448 MiB each.
+- Homebrew: `brew install kabirnarang39/tap/grovedock` (the name `gd` is taken by libgd in Homebrew's core).
+
 ## [4.0.2] - 2026-10-22
 
 ### Changed

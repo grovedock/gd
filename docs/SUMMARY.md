@@ -1,6 +1,6 @@
 # Summary
 
-[Grovedock](introduction.md)
+[Overview](introduction.md)
 
 # Get started
 
@@ -29,6 +29,7 @@
 - [Architecture](ARCHITECTURE.md)
 - [Design decisions](DECISIONS.md)
 - [Benchmarks](comparisons/git-vs-gd.md)
+  - [Run it yourself](comparisons/run-it-yourself.md)
 - [Prior art](PRIOR_ART.md)
 
 # Project

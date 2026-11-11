@@ -2,7 +2,7 @@
 
 **Effective date:** 19 October 2026
 
-This policy covers payments to **Kabir Narang** (trading as "Grovedock") for Grovedock and Grovedock Enterprise. Contact: grievance@grovedock.com, [REGISTERED ADDRESS].
+This policy covers payments to **Kabir Narang** (trading as "Grovedock") for Grovedock and Grovedock Enterprise. Contact: grievance@grovedock.com, Karnal, Haryana, India.
 
 ## 1. Grovedock — monthly plans
 

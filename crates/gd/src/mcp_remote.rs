@@ -368,6 +368,73 @@ fn bearer(parts: &Parts) -> Result<String, String> {
         .ok_or_else(|| "send your Grovedock token as `Authorization: Bearer gd_…`".to_owned())
 }
 
+/// Tokens the server accepted lately, by hash (never the token itself), and when.
+struct TokenCheck {
+    server: String,
+    seen: std::sync::Mutex<std::collections::HashMap<[u8; 32], std::time::Instant>>,
+}
+
+/// How long an accepted token is trusted before it is checked again (a revoked one stops
+/// working on its next tool call regardless: every call goes to the server with it).
+const TOKEN_RECHECK: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// An agent whose token the server refuses hears so when it connects, as the MCP authorization
+/// spec has it (401 with `WWW-Authenticate: Bearer`), instead of seeing every tool and failing
+/// on the first call. Checking also marks the token used, so the console sees the agent arrive.
+async fn check_token(
+    axum::extract::State(check): axum::extract::State<Arc<TokenCheck>>,
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let refuse = |why: &str| {
+        (axum::http::StatusCode::UNAUTHORIZED, [("www-authenticate", "Bearer realm=\"grovedock\"")], why.to_owned())
+            .into_response()
+    };
+    // A browser request is judged on its Origin first (by the MCP service, which refuses it
+    // unless allowed), so a web page can't use this check to probe tokens. Each tool call
+    // still takes the token to the server.
+    if req.headers().contains_key("origin") {
+        return next.run(req).await;
+    }
+    let token = match req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+    {
+        Some(t) if !t.trim().is_empty() => t.trim().to_owned(),
+        _ => return refuse("send your Grovedock token as `Authorization: Bearer gd_…`"),
+    };
+    let key = *blake3::hash(token.as_bytes()).as_bytes();
+    let fresh = check.seen.lock().unwrap().get(&key).is_some_and(|at| at.elapsed() < TOKEN_RECHECK);
+    if !fresh {
+        let remote = match GrpcRemote::connect(&check.server, None, Some(&token)) {
+            Ok(r) => r,
+            Err(e) => return refuse(&format!("{e:#}")),
+        };
+        match remote.platform().viewer(grovedock_proto::Empty {}).await {
+            Ok(_) => {
+                let mut seen = check.seen.lock().unwrap();
+                // Bounded: forget the oldest when many agents come and go.
+                if seen.len() >= 10_000 {
+                    seen.retain(|_, at| at.elapsed() < TOKEN_RECHECK);
+                }
+                seen.insert(key, std::time::Instant::now());
+            }
+            Err(s) if matches!(s.code(), tonic::Code::Unauthenticated | tonic::Code::PermissionDenied) => {
+                return refuse(
+                    "this token isn't accepted (wrong, expired or revoked); make a new one in Grovedock's Tokens page",
+                );
+            }
+            // The server can't say (an older server, or a moment unavailable): let the call
+            // through; each tool call still goes to the server with the token.
+            Err(_) => {}
+        }
+    }
+    next.run(req).await
+}
+
 fn split(repo: &str) -> Result<RepositoryRef, String> {
     let (owner, name) = repo.split_once('/').ok_or("give the repository as OWNER/NAME")?;
     Ok(RepositoryRef { owner: owner.into(), name: name.into() })
@@ -386,14 +453,14 @@ fn state_name(s: i32) -> &'static str {
 /// A change request as an agent reads it: what it is, who said what, and what blocks it.
 fn describe(cr: &ChangeRequest) -> String {
     let mut out = format!(
-        "#{} {} [{}]\n{} wants to land {} into {}: {} files, +{} -{}\n",
+        "#{} {} [{}]\n{} wants to land {} into {}: {}, +{} -{}\n",
         cr.number,
         cr.title,
         state_name(cr.state),
         cr.author,
         cr.source,
         cr.target,
-        cr.files,
+        crate::files(cr.files as u64),
         cr.additions,
         cr.deletions
     );
@@ -483,8 +550,11 @@ impl RemoteMcp {
         let me = self.clone();
         let service =
             StreamableHttpService::new(move || Ok(me.clone()), Arc::new(NeverSessionManager::default()), config);
-        let app =
-            axum::Router::new().nest_service("/mcp", service).route("/healthz", axum::routing::get(|| async { "ok" }));
+        let check = Arc::new(TokenCheck { server: self.server.to_string(), seen: Default::default() });
+        let mcp = axum::Router::new()
+            .nest_service("/mcp", service)
+            .layer(axum::middleware::from_fn_with_state(check, check_token));
+        let app = mcp.route("/healthz", axum::routing::get(|| async { "ok" }));
         let listener = tokio::net::TcpListener::bind(listen).await?;
         eprintln!("gd MCP on http://{listen}/mcp, for {}", self.server);
         axum::serve(listener, app).with_graceful_shutdown(crate::shutdown_signal()).await?;

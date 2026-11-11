@@ -142,47 +142,40 @@
                 {{> header}}
                 <div id="mdbook-menu-bar-hover-placeholder"></div>
                 <div id="mdbook-menu-bar" class="menu-bar sticky">
-                    <div class="left-buttons">
-                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" role="button" tabindex="0" title="Contents" aria-label="Contents" aria-controls="mdbook-sidebar">
-                            {{fa "solid" "bars"}}
+                    <div class="gd-bar">
+                        <div class="gd-brandcell">
+                        <label id="mdbook-sidebar-toggle" class="icon-button gd-only-narrow" for="mdbook-sidebar-toggle-anchor" role="button" tabindex="0" title="Contents" aria-label="Contents" aria-controls="mdbook-sidebar">
+                            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                         </label>
-                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Light or dark" aria-label="Light or dark" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
-                            {{fa "solid" "paintbrush"}}
+                        <a class="gd-lockup" href="https://grovedock.com" aria-label="Grovedock home">
+                            <svg class="gd-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="31" cy="28" r="11.5" fill="none" stroke="currentColor" stroke-width="6.5"/><path d="M42.5 20V43Q42.5 56 29 56H24" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="42.5" cy="9" r="5" fill="#F0B429"/></svg>
+                            <span class="gd-word">grovedock</span>
+                        </a>
+                        <a class="gd-section" href="{{ path_to_root }}index.html">Docs</a>
+                        </div>
+                        <div class="gd-mid">
+                        {{#if search_enabled}}
+                        <button id="mdbook-search-toggle" class="gd-search" type="button" title="Search (/ or ⌘K)" aria-label="Search the docs" aria-expanded="false" aria-keyshortcuts="/ s Meta+K Control+K" aria-controls="mdbook-searchbar">
+                            <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m13 13 4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                            <span class="gd-search-label">Search the docs</span>
+                            <kbd class="gd-kbd">⌘K</kbd>
+                        </button>
+                        {{/if}}
+                        </div>
+                        <nav class="gd-links" aria-label="Grovedock">
+                            <a href="https://cloud.grovedock.com/explore">Explore</a>
+                            <a href="https://grovedock.com/pricing.html">Pricing</a>
+                            {{#if git_repository_url}}<a href="{{git_repository_url}}">GitHub</a>{{/if}}
+                        </nav>
+                        <button id="mdbook-theme-toggle" class="icon-button gd-theme" type="button" title="Light or dark" aria-label="Light or dark" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M10 3.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg>
                         </button>
                         <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
                             <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Match system</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Dark</button></li>
                         </ul>
-                        {{#if search_enabled}}
-                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Search" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
-                            {{fa "solid" "magnifying-glass"}}
-                        </button>
-                        {{/if}}
-                    </div>
-
-                    <a class="menu-title" href="{{ path_to_root }}index.html" aria-label="Grovedock documentation, home">
-                        <svg class="gd-mark" viewBox="8 6 34 52" aria-hidden="true" focusable="false"><path d="M21 13h12.5a12.5 12.5 0 0 1 0 25H25" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/><path d="M21 10v44" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><circle class="gd-mark-dot" cx="21" cy="38" r="6.2"/></svg>
-                        <span class="gd-word">Grovedock</span><span class="gd-docs">docs</span>
-                    </a>
-
-                    <div class="right-buttons">
-                        {{#if print_enable}}
-                        <a href="{{ path_to_root }}print.html" title="Print this book" aria-label="Print this book">
-                            {{fa "solid" "print" "print-button"}}
-                        </a>
-                        {{/if}}
-                        {{#if git_repository_url}}
-                        <a href="{{git_repository_url}}" title="Grovedock on GitHub" aria-label="Grovedock on GitHub">
-                            {{fa git_repository_icon_class git_repository_icon}}
-                        </a>
-                        {{/if}}
-                        {{#if git_repository_edit_url}}
-                        <a href="{{git_repository_edit_url}}" title="Edit this page" aria-label="Edit this page on GitHub" rel="edit">
-                            {{fa "solid" "pencil" "git-edit-button"}}
-                        </a>
-                        {{/if}}
-
+                        <a class="gd-cta" href="https://cloud.grovedock.com/">Start free</a>
                     </div>
                 </div>
 
@@ -218,64 +211,35 @@
                         {{{ content }}}
                     </main>
 
-                    <footer class="gd-footer">
-                        <p class="gd-footer-line">One root. Thousands of agents.</p>
-                        <p>Grovedock is open source under Apache-2.0, maintained by one person.
-                        <a href="https://github.com/grovedock/gd">Source</a>,
-                        <a href="https://github.com/grovedock/gd/releases">releases</a>,
-                        <a href="https://github.com/grovedock/gd/issues">issues</a>,
-                        <a href="https://grovedock.com/console/">live console</a>.</p>
-                        {{#if git_repository_edit_url}}<p><a href="{{git_repository_edit_url}}">Edit this page on GitHub</a></p>{{/if}}
-                    </footer>
-
-                    <nav class="nav-wrapper" aria-label="Page navigation">
-                        <!-- Mobile navigation buttons -->
+                    <nav class="gd-pager" aria-label="Page navigation">
                         {{#if previous}}
-                            <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
-                                {{#if (eq ../text_direction "rtl")}}
-                                {{fa "solid" "angle-right"}}
-                                {{else}}
-                                {{fa "solid" "angle-left"}}
-                                {{/if}}
-                            </a>
+                        <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="gd-pager-link previous mobile-nav-chapters" aria-keyshortcuts="Left">
+                            <span class="gd-pager-dir">Previous</span>
+                            <span class="gd-pager-name">{{previous.name}}</span>
+                        </a>
                         {{/if}}
-
                         {{#if next}}
-                            <a rel="next prefetch" href="{{ path_to_root }}{{next.link}}" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                {{#if (eq ../text_direction "rtl")}}
-                                {{fa "solid" "angle-left"}}
-                                {{else}}
-                                {{fa "solid" "angle-right"}}
-                                {{/if}}
-                            </a>
+                        <a rel="next prefetch" href="{{ path_to_root }}{{next.link}}" class="gd-pager-link next mobile-nav-chapters" aria-keyshortcuts="Right">
+                            <span class="gd-pager-dir">Next</span>
+                            <span class="gd-pager-name">{{next.name}}</span>
+                        </a>
                         {{/if}}
-
-                        <div style="clear: both"></div>
                     </nav>
+
+                    <footer class="gd-footer">
+                        <p>gd, its CLI and SDKs are open source under Apache-2.0. © 2026 Grovedock.</p>
+                        <p class="gd-footer-links">
+                            <a href="https://github.com/grovedock/gd">Source</a>
+                            <a href="https://github.com/grovedock/gd/releases">Releases</a>
+                            <a href="https://github.com/grovedock/gd/issues">Report a problem</a>
+                            <a href="https://grovedock.betteruptime.com">Status</a>
+                            {{#if git_repository_edit_url}}<a href="{{git_repository_edit_url}}">Edit this page</a>{{/if}}
+                        </p>
+                    </footer>
                 </div>
             </div>
 
-            <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                {{#if previous}}
-                    <a rel="prev" href="{{ path_to_root }}{{previous.link}}" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
-                        {{#if (eq ../text_direction "rtl")}}
-                        {{fa "solid" "angle-right"}}
-                        {{else}}
-                        {{fa "solid" "angle-left"}}
-                        {{/if}}
-                    </a>
-                {{/if}}
 
-                {{#if next}}
-                    <a rel="next prefetch" href="{{ path_to_root }}{{next.link}}" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        {{#if (eq text_direction "rtl")}}
-                        {{fa "solid" "angle-left"}}
-                        {{else}}
-                        {{fa "solid" "angle-right"}}
-                        {{/if}}
-                    </a>
-                {{/if}}
-            </nav>
 
         </div>
 

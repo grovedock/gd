@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/core", "crates/proto", "crates/adapters", "crates/workflow", "crates/gd"]
 
 [workspace.package]
-version = "4.0.2"
+version = "4.0.5"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/grovedock/gd"
@@ -29,7 +29,7 @@ getrandom = "0.4"
 hex = "0.4"
 hmac = "0.13"
 prost = "0.14"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"

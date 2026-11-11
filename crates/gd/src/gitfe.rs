@@ -35,6 +35,10 @@ pub struct GitCommit {
     /// the message's bytes.
     pub author_raw: String,
     pub committer_raw: String,
+    /// The author and committer lines' bytes when they aren't UTF-8 (old Latin-1 names);
+    /// `author_raw` / `committer_raw` then hold them made readable.
+    pub author_bytes: Vec<u8>,
+    pub committer_bytes: Vec<u8>,
     pub encoding: String,
     pub signature: Option<(String, Vec<u8>)>,
     pub message_raw: Vec<u8>,
@@ -60,6 +64,8 @@ pub enum Event {
 pub struct Parser<R> {
     r: R,
     peeked: Option<String>,
+    /// The bytes of the last line read, when they weren't UTF-8 (the line itself is lossy).
+    raw: Option<Vec<u8>>,
 }
 
 fn parse_mark(s: &str) -> Result<u64> {
@@ -136,7 +142,7 @@ fn parse_ident(s: &str) -> Result<(String, i64)> {
 
 impl<R: BufRead> Parser<R> {
     pub fn new(r: R) -> Self {
-        Self { r, peeked: None }
+        Self { r, peeked: None, raw: None }
     }
 
     fn line(&mut self) -> Result<Option<String>> {
@@ -150,14 +156,20 @@ impl<R: BufRead> Parser<R> {
         if buf.last() == Some(&b'\n') {
             buf.pop();
         }
+        self.raw = None;
         match String::from_utf8(buf) {
             Ok(s) => Ok(Some(s)),
             // Paths must round-trip exactly; refuse rather than silently rename a file.
             Err(e) if e.as_bytes().starts_with(b"M ") || e.as_bytes().starts_with(b"D ") => {
                 bail!("non-UTF-8 path in git history: {}", String::from_utf8_lossy(e.as_bytes()))
             }
-            // Identity lines from old commits may be Latin-1 even with --reencode.
-            Err(e) => Ok(Some(String::from_utf8_lossy(e.as_bytes()).into_owned())),
+            // Identity lines from old commits may be Latin-1 even with --reencode: readable
+            // here, and their bytes kept for the commit to be made again exactly.
+            Err(e) => {
+                let line = String::from_utf8_lossy(e.as_bytes()).into_owned();
+                self.raw = Some(e.into_bytes());
+                Ok(Some(line))
+            }
         }
     }
 
@@ -221,11 +233,13 @@ impl<R: BufRead> Parser<R> {
             } else if let Some(a) = l.strip_prefix("author ") {
                 (c.author, c.timestamp_s) = parse_ident(a)?;
                 c.author_raw = a.to_owned();
+                c.author_bytes = self.raw.take().map(|b| b["author ".len()..].to_vec()).unwrap_or_default();
             } else if let Some(a) = l.strip_prefix("committer ") {
                 if c.author.is_empty() {
                     (c.author, c.timestamp_s) = parse_ident(a)?;
                 }
                 c.committer_raw = a.to_owned();
+                c.committer_bytes = self.raw.take().map(|b| b["committer ".len()..].to_vec()).unwrap_or_default();
             } else if let Some(e) = l.strip_prefix("encoding ") {
                 c.encoding = e.to_owned();
             } else if let Some(alg) = l.strip_prefix("gpgsig ") {
@@ -304,9 +318,21 @@ impl<W: Write> Writer<W> {
         write!(self.w, "commit {refname}\nmark :{mark}\n")?;
         match h.git {
             Some(g) => {
-                writeln!(self.w, "author {}\ncommitter {}", g.author, g.committer)?;
-                if !g.signature.is_empty() {
-                    write!(self.w, "gpgsig {}\ndata {}\n", g.signature_algorithm, g.signature.len())?;
+                let ident =
+                    |text: &str, bytes: &[u8]| if bytes.is_empty() { text.as_bytes().to_vec() } else { bytes.to_vec() };
+                self.w.write_all(b"author ")?;
+                self.w.write_all(&ident(&g.author, &g.author_bytes))?;
+                self.w.write_all(b"\ncommitter ")?;
+                self.w.write_all(&ident(&g.committer, &g.committer_bytes))?;
+                self.w.write_all(b"\n")?;
+                // Older git's fast-import can't take a signature; export puts it back as a header.
+                if !g.signature.is_empty() && crate::gitmodes::fast_export_carries_signatures() {
+                    write!(
+                        self.w,
+                        "gpgsig {}\ndata {}\n",
+                        gpgsig_spec(&g.signature_algorithm, &g.signature),
+                        g.signature.len()
+                    )?;
                     self.w.write_all(&g.signature)?;
                     self.w.write_all(b"\n")?;
                 }
@@ -477,5 +503,85 @@ author t <t@t> 6 +0000\ncommitter t <t@t> 6 +0000\ndata 0\nfrom :7\nM 160000 012
             assert_eq!(unquote(&quote(p)).unwrap(), p, "{p:?}");
         }
         assert_eq!(unquote("\"caf\\303\\251\"").unwrap(), "caf\u{e9}");
+    }
+}
+
+/// What follows `gpgsig` in a fast-import stream for this machine's git: git 2.48-2.50 take the
+/// hash algorithm alone and refuse more; newer git wants the signature's format beside it. A
+/// format missing from an older export comes from the signature itself, as git tells them apart.
+fn gpgsig_spec(algorithm: &str, signature: &[u8]) -> String {
+    gpgsig_spec_for(algorithm, signature, fast_import_wants_format())
+}
+
+fn gpgsig_spec_for(algorithm: &str, signature: &[u8], wants_format: bool) -> String {
+    let algo = algorithm.split_whitespace().next().unwrap_or("sha1");
+    if !wants_format {
+        return algo.to_owned();
+    }
+    if algorithm.contains(' ') {
+        return algorithm.to_owned();
+    }
+    let format = if signature.starts_with(b"-----BEGIN SSH SIGNATURE-----") {
+        "ssh"
+    } else if signature.starts_with(b"-----BEGIN SIGNED MESSAGE-----") {
+        "x509"
+    } else {
+        "openpgp"
+    };
+    format!("{algo} {format}")
+}
+
+/// Whether this machine's `git fast-import` wants `gpgsig <algorithm> <format>`: asked once, by
+/// importing one signed commit into a throwaway repository.
+fn fast_import_wants_format() -> bool {
+    static WANTS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *WANTS.get_or_init(|| {
+        let Ok(dir) = tempfile::tempdir() else { return true };
+        let git = |args: &[&str]| {
+            let mut c = std::process::Command::new("git");
+            c.arg("-C").arg(dir.path()).args(args);
+            c
+        };
+        if !git(&["init", "-q", "--bare"]).status().is_ok_and(|s| s.success()) {
+            return true;
+        }
+        let sig = "-----BEGIN PGP SIGNATURE-----\nx\n-----END PGP SIGNATURE-----";
+        let stream = format!(
+            "commit refs/heads/probe\ncommitter p <p> 0 +0000\ngpgsig sha1 openpgp\ndata {}\n{sig}\ndata 0\n\n",
+            sig.len()
+        );
+        let mut import = git(&["fast-import", "--quiet"]);
+        let Ok(mut child) = import
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        else {
+            return true;
+        };
+        use std::io::Write;
+        let _ = child.stdin.take().map(|mut i| i.write_all(stream.as_bytes()));
+        child.wait().is_ok_and(|s| s.success())
+    })
+}
+
+#[cfg(test)]
+mod gpgsig_tests {
+    #[test]
+    fn a_signature_is_named_the_way_this_git_takes_it() {
+        use super::gpgsig_spec_for as spec;
+        // Newer git: the format beside the algorithm, from the signature when an export lacked it.
+        assert_eq!(spec("sha1", b"-----BEGIN PGP SIGNATURE-----\n", true), "sha1 openpgp");
+        assert_eq!(spec("sha256", b"-----BEGIN SSH SIGNATURE-----\n", true), "sha256 ssh");
+        assert_eq!(spec("sha1 x509", b"anything", true), "sha1 x509");
+        // git 2.48-2.50: the algorithm alone.
+        assert_eq!(spec("sha1 openpgp", b"anything", false), "sha1");
+        assert_eq!(spec("sha256", b"anything", false), "sha256");
+    }
+
+    #[test]
+    fn this_machine_s_git_takes_what_we_write() {
+        // Whatever the local git is, the form chosen for it imports.
+        let _ = super::fast_import_wants_format();
     }
 }

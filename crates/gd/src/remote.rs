@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
+use bytes::Bytes;
 use grovedock_adapters::grpc::{GrpcObjects, status_err};
 use grovedock_core::acl::ReadScope;
 use grovedock_core::object::{Changeset, FileChange, Mode};
@@ -22,8 +23,8 @@ use grovedock_proto::merge_base_client::MergeBaseClient;
 use grovedock_proto::refs_client::RefsClient;
 use grovedock_proto::{
     BearerAuth, BlameRequest, BrowseRequest, CasRequest, CheckoutRequest, CreateChangesetRequest, DiffRequest, Empty,
-    FindRequest, LandRequest, ListLocksRequest, LockRequest, LogRequest, MAX_MESSAGE_BYTES, MergeBaseRequest, RefName,
-    ResolveRequest, UnlockRequest,
+    FindRequest, LandRequest, ListLocksRequest, LockRequest, LogRequest, MAX_MESSAGE_BYTES, MergeBaseRequest,
+    ObjectPayload, RefName, ResolveRequest, UnlockRequest,
 };
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::Channel;
@@ -92,6 +93,11 @@ pub async fn create_one_by_one<R: Remote + ?Sized>(
 pub trait Remote: Send + Sync {
     /// Object access; may point at a node daemon or regional cache instead of the server.
     fn objects(&self) -> Arc<dyn ObjectStore>;
+    /// Where this remote is (a server, and a repository on it), for keeping local state per
+    /// destination; empty when it has no address.
+    fn address(&self) -> String {
+        String::new()
+    }
     async fn create_changeset(&self, cs: Changeset) -> Result<RemoteChangeset>;
     /// The same, with what an agent says of itself (model, session, issue) recorded by the server
     /// beside the change, not in its message.
@@ -114,6 +120,17 @@ pub trait Remote: Send + Sync {
     async fn compare_and_swap(&self, name: &str, expected: Option<Id>, new: Id) -> Result<bool>;
     async fn list_refs(&self) -> Result<Vec<(String, Id)>>;
     async fn land(&self, ref_name: &str, cs: Id) -> Result<(Id, bool)>;
+    /// Stores `objects`, makes `cs` and lands it in one round trip (protocol 1.2): the change
+    /// made, where it landed, and whether it was rebased. `None` when the server can't (before
+    /// 1.2, or the change is too large for one call): then do the three calls.
+    async fn create_and_land(
+        &self,
+        _ref_name: &str,
+        _objects: Vec<(Id, Bytes)>,
+        _cs: Changeset,
+    ) -> Result<Option<(Id, Id, bool)>> {
+        Ok(None)
+    }
     /// Moves `ref_name` to `cs` as it is if its head is an ancestor (as git pushes), with every
     /// changeset it brings checked as a land would be; refused otherwise.
     async fn fast_forward(&self, ref_name: &str, cs: Id) -> Result<Id>;
@@ -156,6 +173,8 @@ pub struct GrpcRemote {
     channel: Channel,
     auth: BearerAuth,
     objects: Arc<dyn ObjectStore>,
+    /// The address it was opened with (server, and repository when named).
+    address: String,
 }
 
 fn verify(info: grovedock_proto::ChangesetInfo) -> Result<RemoteChangeset> {
@@ -201,7 +220,7 @@ impl GrpcRemote {
             Some(url) => Arc::new(GrpcObjects::connect(url, token)?),
             None => Arc::new(GrpcObjects::with_auth(channel.clone(), auth.clone())),
         };
-        Ok(Self { channel, auth, objects })
+        Ok(Self { channel, auth, objects, address: server.trim_end_matches('/').to_owned() })
     }
 
     fn ch(&self) -> Ch {
@@ -282,6 +301,10 @@ fn st(s: tonic::Status) -> anyhow::Error {
 impl Remote for GrpcRemote {
     fn objects(&self) -> Arc<dyn ObjectStore> {
         self.objects.clone()
+    }
+
+    fn address(&self) -> String {
+        self.address.clone()
     }
 
     async fn create_changeset(&self, cs: Changeset) -> Result<RemoteChangeset> {
@@ -380,15 +403,83 @@ impl Remote for GrpcRemote {
     }
 
     async fn fast_forward(&self, ref_name: &str, cs: Id) -> Result<Id> {
-        let req = LandRequest { r#ref: ref_name.to_owned(), changeset: cs.0.to_vec(), fast_forward: true };
+        let req = LandRequest {
+            r#ref: ref_name.to_owned(),
+            changeset: cs.0.to_vec(),
+            fast_forward: true,
+            ..Default::default()
+        };
         let r = LandClient::new(self.ch()).land(req).await.map_err(st)?.into_inner();
         Ok(Id::from_slice(&r.landed)?)
     }
 
     async fn land(&self, ref_name: &str, cs: Id) -> Result<(Id, bool)> {
-        let req = LandRequest { r#ref: ref_name.to_owned(), changeset: cs.0.to_vec(), fast_forward: false };
+        let req = LandRequest { r#ref: ref_name.to_owned(), changeset: cs.0.to_vec(), ..Default::default() };
         let r = LandClient::new(self.ch()).land(req).await.map_err(st)?.into_inner();
         Ok((Id::from_slice(&r.landed)?, r.rebased))
+    }
+
+    async fn create_and_land(
+        &self,
+        ref_name: &str,
+        objects: Vec<(Id, Bytes)>,
+        cs: Changeset,
+    ) -> Result<Option<(Id, Id, bool)>> {
+        let env = |k: &str| std::env::var(k).unwrap_or_default();
+        let req = LandRequest {
+            r#ref: ref_name.to_owned(),
+            objects: objects
+                .into_iter()
+                .map(|(id, p)| ObjectPayload { id: id.0.to_vec(), payload: p.to_vec() })
+                .collect(),
+            create: Some(CreateChangesetRequest {
+                model: env("GD_MODEL"),
+                session: env("GD_SESSION"),
+                task: env("GD_TASK").trim_start_matches('#').parse().unwrap_or(0),
+                parents: cs.parents,
+                changes: cs.changes.into_iter().map(wire_change).collect(),
+                author: cs.author,
+                message: cs.message,
+                timestamp_ms: cs.timestamp_ms,
+                git: cs.git.map(|g| prost::Message::encode_to_vec(&g)).unwrap_or_default(),
+                parent_refs: vec![],
+            }),
+            ..Default::default()
+        };
+        let mut client = LandClient::new(self.ch()).max_encoding_message_size(MAX_MESSAGE_BYTES);
+        let mut reply = client.land(req.clone()).await;
+        // A lost reply may hide a land that happened. The same request again makes the same
+        // change, and landing a landed change only reports where it went (LAND-5): safe.
+        if let Err(s) = &reply
+            && matches!(s.code(), tonic::Code::Unavailable | tonic::Code::Unknown | tonic::Code::Cancelled)
+        {
+            reply = client.land(req).await;
+        }
+        let r = match reply {
+            Ok(r) => r.into_inner(),
+            // The server answered, and nothing landed: one before 1.2 refuses the empty
+            // changeset id before doing anything; a newer one refused the change (too large, a
+            // protected branch, a conflict). The three calls then do it, or say why not.
+            Err(s)
+                if matches!(
+                    s.code(),
+                    tonic::Code::InvalidArgument
+                        | tonic::Code::FailedPrecondition
+                        | tonic::Code::PermissionDenied
+                        | tonic::Code::Aborted
+                        | tonic::Code::NotFound
+                        | tonic::Code::AlreadyExists
+                ) =>
+            {
+                return Ok(None);
+            }
+            // Anything else (a dropped connection) may have landed: report it, never resend.
+            Err(s) => return Err(st(s)),
+        };
+        if r.created.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some((Id::from_slice(&r.created)?, Id::from_slice(&r.landed)?, r.rebased)))
     }
 
     async fn log(&self, rev: &str, path: &str, limit: u32) -> Result<Vec<RemoteChangeset>> {

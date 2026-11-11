@@ -1903,7 +1903,7 @@ Ways people sign in from a browser
 Usage: gd admin identity [OPTIONS] <COMMAND>
 
 Commands:
-  link  Let an identity sign in as an existing account, e.g. the first administrator: `gd admin identity link kabir --provider email --subject kabir@example.com`
+  link  Let an identity sign in as an existing account, e.g. the first administrator: `gd admin identity link ada --provider email --subject ada@example.com`
   help  Print this message or the help of the given subcommand(s)
 
 Options:
@@ -1916,7 +1916,7 @@ Options:
 #### `gd admin identity link`
 
 ```text
-Let an identity sign in as an existing account, e.g. the first administrator: `gd admin identity link kabir --provider email --subject kabir@example.com`
+Let an identity sign in as an existing account, e.g. the first administrator: `gd admin identity link ada --provider email --subject ada@example.com`
 
 Usage: gd admin identity link [OPTIONS] --provider <PROVIDER> --subject <SUBJECT> <LOGIN>
 

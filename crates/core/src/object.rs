@@ -132,6 +132,28 @@ pub struct GitOrigin {
     /// The commit id this must reproduce: checked when written, never trusted.
     #[prost(string, tag = "8")]
     pub commit: String,
+    /// Tree entries git spells with a mode it no longer writes (`100664` from git's first
+    /// months, a zero-padded `040000`), as written, so the same commit comes back.
+    #[prost(message, repeated, tag = "9")]
+    pub modes: Vec<GitMode>,
+    /// The author and committer lines' bytes when they aren't UTF-8 (Latin-1 names in old
+    /// commits); `author` and `committer` then hold them made readable.
+    #[prost(bytes = "vec", tag = "10")]
+    pub author_bytes: Vec<u8>,
+    #[prost(bytes = "vec", tag = "11")]
+    pub committer_bytes: Vec<u8>,
+    /// The header lines after `committer`, verbatim, when there are any a git import can't
+    /// carry (`mergetag`, `change-id`).
+    #[prost(bytes = "vec", tag = "12")]
+    pub headers: Vec<u8>,
+}
+
+#[derive(Clone, PartialEq, Eq, prost::Message)]
+pub struct GitMode {
+    #[prost(string, tag = "1")]
+    pub path: String,
+    #[prost(string, tag = "2")]
+    pub mode: String,
 }
 
 #[derive(Clone, PartialEq, Eq, prost::Message)]

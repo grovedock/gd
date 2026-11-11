@@ -1,0 +1,72 @@
+name: CI
+
+# On Grovedock's runner (Linux, Arm, each job in a sandbox): lint, tests, Postgres and audit.
+# macOS and Windows, CockroachDB and S3 (their jobs start containers themselves) run in
+# the repository's other CI folder, on hosts with those runners; that host never reads this one.
+
+on:
+  push:
+    branches: [main]
+  change_request:
+  manual:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+concurrency:
+  group: ci-${{ grovedock.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: grovedock/checkout@v1
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Unused dependencies
+        run: cargo machete
+      - name: Crates package and build from their published tarballs
+        run: cargo package --workspace --locked
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: grovedock/checkout@v1
+      - run: git config --global user.name ci && git config --global user.email ci@example.com
+      - name: Enable the FUSE mount test
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -qq fuse3
+          # A sandboxed job has no /dev/fuse; the test runs where the machine offers FUSE.
+          if [ -e /dev/fuse ]; then echo "GD_FUSE_TEST=1" >> "$GROVEDOCK_ENV"; else echo "::notice::no /dev/fuse here; the FUSE mount test is skipped"; fi
+      - run: cargo test --workspace --locked
+
+  databases:
+    # Same contract suite against real Postgres and CockroachDB (Postgres wire protocol).
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: { POSTGRES_PASSWORD: gd, POSTGRES_DB: gd }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 2s --health-retries 30
+    steps:
+      - uses: grovedock/checkout@v1
+      - name: Postgres contract
+        env: { GD_TEST_POSTGRES_URL: "postgres://postgres:gd@localhost:5432/gd" }
+        run: cargo test -p grovedock-adapters --test contract --locked postgres -- --nocapture
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: grovedock/checkout@v1
+      - run: cargo audit --deny warnings

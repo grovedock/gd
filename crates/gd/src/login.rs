@@ -84,22 +84,20 @@ pub async fn login(server: &str) -> Result<()> {
             other => bail!("sign-in failed: {}", other.unwrap_or("no answer")),
         }
     };
-    let path = credentials::path().context("no home directory to keep the token in; set GD_TOKEN instead")?;
-    credentials::save(&path, &origin, &token)?;
+    let saved_in = credentials::store(&origin, &token)?;
     let mut p = GrpcRemote::connect(&origin, None, Some(&token))?.platform();
     let me = p.viewer(Empty {}).await.map(|r| r.into_inner().account.map(|a| a.login));
     match me {
         Ok(Some(login)) => println!("signed in to {origin} as {login}"),
         _ => println!("signed in to {origin}"),
     }
-    eprintln!("token saved in {}", path.display());
+    eprintln!("token saved in {saved_in}");
     Ok(())
 }
 
 pub async fn logout(server: &str) -> Result<()> {
     let origin = credentials::key(server);
-    let path = credentials::path().context("no home directory")?;
-    let Some(token) = credentials::load(&path, &origin) else {
+    let Some(token) = credentials::stored(&origin) else {
         println!("not signed in to {origin}");
         return Ok(());
     };
@@ -113,7 +111,7 @@ pub async fn logout(server: &str) -> Result<()> {
         Ok::<_, tonic::Status>(())
     }
     .await;
-    credentials::remove(&path, &origin)?;
+    credentials::forget(&origin)?;
     match revoked {
         Ok(()) => println!("signed out of {origin}"),
         Err(e) => {
@@ -126,7 +124,7 @@ pub async fn logout(server: &str) -> Result<()> {
 
 pub async fn whoami(server: &str, token: Option<&str>) -> Result<()> {
     let mut p = GrpcRemote::connect(server, None, token)?.platform();
-    let v = p.viewer(Empty {}).await.map_err(|e| anyhow::anyhow!("{}", e.message()))?.into_inner();
+    let v = p.viewer(Empty {}).await.map_err(|e| anyhow::anyhow!(grovedock_adapters::grpc::words(&e)))?.into_inner();
     let a = v.account.context("no account")?;
     let orgs: Vec<String> = v.organizations.into_iter().map(|o| o.login).collect();
     println!("{}{}", a.login, if a.site_admin { " (site administrator)" } else { "" });

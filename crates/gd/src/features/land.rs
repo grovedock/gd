@@ -53,12 +53,15 @@ pub async fn run(remote: &dyn Remote, ws: &mut Workspace) -> Result<LandOutcome>
 pub async fn run_with(remote: &dyn Remote, ws: &mut Workspace, squash: bool) -> Result<LandOutcome> {
     let Some(base) = ws.base else { bail!("nothing to land: commit first") };
     let ref_name = ws.config.ref_name.clone();
-    let chain = if ws.base_landed {
-        vec![remote.changeset(&base.to_hex()).await?]
+    // One change on landed history: it goes as committed, so nothing needs fetching first
+    // (the changeset body is read only for later commits in a chain, or to squash).
+    let single = ws.base_landed || ws.parent_landed;
+    let chain = if single { Vec::new() } else { unlanded(remote, &ref_name, base).await? };
+    let mut todo: Vec<(Option<Id>, Changeset)> = if single {
+        vec![(Some(base), Changeset::default())]
     } else {
-        unlanded(remote, &ref_name, base).await?
+        chain.iter().map(|c| (Some(c.id), c.changeset.clone())).collect()
     };
-    let mut todo: Vec<(Option<Id>, Changeset)> = chain.iter().map(|c| (Some(c.id), c.changeset.clone())).collect();
     if squash && todo.len() > 1 {
         // One change: everything from where the first started to the last.
         let from = chain[0].changeset.first_parent()?.context("the first commit has no parent to squash onto")?;
@@ -89,6 +92,7 @@ pub async fn run_with(remote: &dyn Remote, ws: &mut Workspace, squash: bool) -> 
                 // The rest stay committed, now on top of what landed, for the next `gd land`.
                 ws.base = Some(id);
                 ws.base_landed = false;
+                ws.parent_landed = false;
                 ws.save()?;
                 return Err(e.context(format!("landed {i} of {total} commits; the rest are still to land")));
             }
@@ -100,8 +104,21 @@ pub async fn run_with(remote: &dyn Remote, ws: &mut Workspace, squash: bool) -> 
             Err(e) => return Err(e),
         }
     }
-    let landed = landed.expect("something landed");
+    settle(remote, ws, base, landed.expect("something landed"), rebased, total).await
+}
+
+/// After the commits up to `base` landed at `landed` (rebased when the ref had moved): the
+/// working copy takes in what others landed first, unless that clashes with uncommitted edits.
+pub(crate) async fn settle(
+    remote: &dyn Remote,
+    ws: &mut Workspace,
+    base: Id,
+    landed: Id,
+    rebased: bool,
+    total: usize,
+) -> Result<LandOutcome> {
     ws.base_landed = true;
+    ws.parent_landed = false;
     let mut out = LandOutcome { landed, rebased, commits: total, synced: 0, behind: None };
     if landed != base {
         let incoming = remote.diff(&base.to_hex(), &landed.to_hex()).await?;

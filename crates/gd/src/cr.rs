@@ -198,7 +198,7 @@ fn explain(s: tonic::Status) -> anyhow::Error {
     if s.code() == tonic::Code::Unimplemented {
         anyhow!("this server has no change requests; they come with `grovedockd server --platform`")
     } else {
-        anyhow!("{}", s.message())
+        anyhow!(grovedock_adapters::grpc::words(&s))
     }
 }
 
@@ -215,8 +215,13 @@ fn state_name(s: i32) -> &'static str {
 fn print(cr: &ChangeRequest) {
     println!("#{} {} [{}]", cr.number, cr.title, state_name(cr.state));
     println!(
-        "  {} wants to land {} into {}: {} files, +{} -{}",
-        cr.author, cr.source, cr.target, cr.files, cr.additions, cr.deletions
+        "  {} wants to land {} into {}: {}, +{} -{}",
+        cr.author,
+        cr.source,
+        cr.target,
+        gd::files(cr.files as u64),
+        cr.additions,
+        cr.deletions
     );
     for r in &cr.reviews {
         let v = match Verdict::try_from(r.verdict).unwrap_or(Verdict::Unspecified) {

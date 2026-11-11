@@ -123,11 +123,21 @@ message LandRequest {
   // its ancestors (or the ref doesn't exist); every changeset it brings is checked as a land
   // would be. Nothing is rebased; otherwise refused ("fetch first").
   bool fast_forward = 3;
+  // Protocol 1.2: a small change in the same call, instead of Objects/Put, Changesets/Create
+  // and Land one after another (an agent's usual edit, three round trips to one). The objects
+  // are stored and `create` made exactly as those calls would, with the same checks, then
+  // landed; `changeset` is left empty. At most 1,024 objects and 4 MiB. A server before 1.2
+  // ignores these fields and refuses the empty `changeset` before doing anything, so a client
+  // can then make the three calls instead.
+  repeated ObjectPayload objects = 4;
+  CreateChangesetRequest create = 5;
 }
 message LandResponse {
   bytes landed = 1;
   bool rebased = 2;
   uint32 attempts = 3;
+  // The change `create` made (protocol 1.2), before any rebase onto the ref.
+  bytes created = 4;
 }
 
 // Server-side rebase + lock-free compare-and-swap of a ref.

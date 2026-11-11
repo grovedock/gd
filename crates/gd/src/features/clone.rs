@@ -28,8 +28,15 @@ pub async fn run(remote: &dyn Remote, flags: &dyn FeatureFlags, dir: &Path, conf
         config.sparse = restrict(&config.sparse, readable);
     }
     let mut ws = Workspace::init(dir, config)?;
-    if let Some(head) = remote.get_ref(&ws.config.ref_name).await? {
-        let cs = remote.changeset(&head.to_hex()).await?;
+    // A branch, or an exact change by its id (a runner checks out a change request's change this way).
+    let name = &ws.config.ref_name;
+    let head = match remote.get_ref(name).await? {
+        Some(h) => Some(h.to_hex()),
+        None if name.len() == 64 && name.bytes().all(|b| b.is_ascii_hexdigit()) => Some(name.to_ascii_lowercase()),
+        None => None,
+    };
+    if let Some(head) = head {
+        let cs = remote.changeset(&head).await?;
         if scope.is_full() {
             ws.checkout(remote.objects(), cs.id, cs.root_tree).await?;
         } else {

@@ -27,8 +27,8 @@
 <style>
   /* Hero: the words on the left, main itself on the right, landing as you read. */
   .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: center; gap: 2.5rem clamp(2rem, 5vw, 4.5rem); padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(3.5rem, 8vw, 6rem); }
-  .hero h1 { font-size: clamp(2.9rem, 6.6vw, 5.4rem); font-weight: 800; line-height: 0.94; letter-spacing: -0.05em; margin: 0 0 1.5rem; max-width: 9.5ch; }
-  .hero .lede { font-size: clamp(1.1rem, 1.5vw, 1.28rem); line-height: 1.55; color: var(--muted); max-width: 31rem; margin: 0 0 2.25rem; }
+  .hero h1 { font-size: clamp(2.4rem, 5vw, 4rem); font-weight: 800; line-height: 0.94; letter-spacing: -0.05em; margin: 0 0 1.5rem; max-width: 9.5ch; }
+  .hero .lede { font-size: clamp(1.02rem, 1.3vw, 1.12rem); line-height: 1.55; color: var(--muted); max-width: 31rem; margin: 0 0 2.25rem; }
   .hero .lede strong { color: var(--ink); font-weight: 650; }
 
   .log { margin: 0; padding: 1.25rem 1.25rem 0.5rem; border-radius: var(--r-lg); background: var(--raised); border: 1px solid var(--rule); box-shadow: var(--shadow); overflow: hidden; }
@@ -82,7 +82,7 @@
   .term button:hover { background: rgb(232 237 242 / 0.14); }
 
   .cloud { display: grid; grid-template-columns: minmax(0, 1.4fr) auto; align-items: end; gap: 1.5rem 3rem; padding: clamp(2rem, 5vw, 3.25rem); border-radius: var(--r-lg); background: var(--band); }
-  .cloud h2 { font-size: clamp(1.75rem, 3.2vw, 2.5rem); line-height: 1.05; letter-spacing: -0.035em; margin: 0 0 0.75rem; }
+  .cloud h2 { font-size: clamp(1.5rem, 2.6vw, 2rem); line-height: 1.05; letter-spacing: -0.035em; margin: 0 0 0.75rem; }
   .cloud p { margin: 0; color: var(--muted); }
   .closing { padding-block: clamp(3rem, 7vw, 5rem) clamp(3.5rem, 9vw, 6rem); }
   @media (max-width: 920px) {
@@ -101,7 +101,7 @@
 <a class="skip" href="#main">Skip to content</a>
 <div class="band">
 <header class="wrap top">
-  <a class="brand" href="./"><img src="mark.svg" alt="" width="30" height="30">{{NAME}}</a>
+  <a class="brand" href="./" aria-label="Grovedock home"><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><circle cx="31" cy="28" r="11.5" fill="none" stroke="currentColor" stroke-width="6.5"/><path d="M42.5 20V43Q42.5 56 29 56H24" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="42.5" cy="9" r="5" fill="#F0B429"/></svg>grovedock</a>
   <nav aria-label="Main">
     <a href="docs/">Docs</a>
     <a class="wide" href="docs/comparisons/git-vs-gd.html">Benchmarks</a>
@@ -147,9 +147,9 @@
 
 <main id="main">
 <section class="wrap sec" aria-labelledby="proof">
-  <h2 id="proof">Land, don't queue.<a href="#fn1" id="fnref1" aria-label="Footnote 1" style="text-decoration:none"><sup>1</sup></a></h2>
+  <h2 id="proof">Land, don't queue.</h2>
   <div>
-    <p>The server commits, checks conflicts per path and moves the branch once per batch, so agents don't wait in line. Measured on one laptop with git/git's history; git gets its best case, a local bare repository.</p>
+    <p>The server commits, checks conflicts per path and moves the branch once per batch, so agents don't wait in line. Measured on git/git's full history, with git given its best case: a local repository and no network.</p>
     <div class="bench">
       <div>
         <h3>200 agents landing on one branch</h3>
@@ -168,7 +168,7 @@
         <div class="pair"><span>git</span><b aria-hidden="true"><i style="--w:100%"></i></b><span class="num">149 ms</span></div>
       </div>
     </div>
-    <p class="cite">Apple M4, release builds, method and scripts in the repository. No errors from 16 to 5,000 agents. Where git wins, too: <a href="docs/comparisons/git-vs-gd.html">the benchmark page</a>.</p>
+    <p class="cite">No errors from 16 to 5,000 agents. Method, hardware, raw results, and where git wins: <a href="docs/comparisons/git-vs-gd.html">the benchmarks</a>, which you can <a href="docs/comparisons/run-it-yourself.html">run yourself</a>.</p>
   </div>
 </section>
 
@@ -208,7 +208,7 @@
   <div>
     <ul class="plain">
       <li><strong>Open protocol, CLI and SDKs</strong><span class="muted">gd, its command-line tool, the git bridge and the Python, TypeScript and Go SDKs are Apache-2.0. Anyone can build a client or a server for the protocol. <a href="{{REPO}}">Source code</a></span></li>
-      <li><strong>{{NAME}}, the platform</strong><span class="muted">Organisations, repositories, reviews, issues, agents, plans and sign-in, run for you at {{CLOUD_URL}} and kept in India. Enterprise runs it on your own servers.</span></li>
+      <li><strong>{{NAME}}, the platform</strong><span class="muted">Organisations, repositories, reviews, issues, agents, plans and sign-in, run for you at <a href="{{CLOUD_URL}}">cloud.grovedock.com</a> and kept in India. Enterprise runs it on your own servers.</span></li>
       <li><strong>Tested by simulation</strong><span class="muted">Every build runs 200 seeded simulations of servers crashing mid-land; chaos tests kill real ones. <a href="docs/testing.html">How it's tested</a></span></li>
     </ul>
     <p class="muted small">Your history is never locked in: <code>gd export-git</code> writes it back to git, the same commits, any time.</p>
@@ -233,7 +233,7 @@
   <div class="wrap">
     <div class="foot">
       <div>
-        <a class="brand" href="./"><img src="mark.svg" alt="" width="26" height="26">{{NAME}}</a>
+        <a class="brand" href="./" aria-label="Grovedock home"><svg width="22" height="22" viewBox="0 0 64 64" aria-hidden="true"><circle cx="31" cy="28" r="11.5" fill="none" stroke="currentColor" stroke-width="6.5"/><path d="M42.5 20V43Q42.5 56 29 56H24" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="42.5" cy="9" r="5" fill="#F0B429"/></svg>grovedock</a>
         <p>A grove is many trees on one root, like many agents on one history; a dock is where their changes land.</p>
       </div>
       <nav aria-labelledby="f-product"><h2 id="f-product">Product</h2>
@@ -252,8 +252,7 @@
       </nav>
     </div>
     <div class="fine">
-      <p id="fn1"><a href="#fnref1" aria-label="Back to text">1</a>. The line nods to Base Power's "Merge, don't queue."</p>
-      <p>gd, its CLI and SDKs are Apache-2.0. {{NAME}} © 2026 Kabir Narang.</p>
+      <p>gd, its CLI and SDKs are Apache-2.0. {{NAME}} © 2026 Grovedock.</p>
     </div>
   </div>
 </footer>

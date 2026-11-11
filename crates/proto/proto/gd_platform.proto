@@ -366,6 +366,13 @@ service Platform {
   // Sends a `ping` event now.
   rpc PingWebhook(WebhookRef) returns (WebhookDelivery);
 
+  // Keeping a git host in sync: after each land on a branch, the same branch on GitHub, GitLab
+  // or Bitbucket is updated (fast-forward only). Repository administrators.
+  rpc GetGitSync(RepositoryRef) returns (GitSync);
+  // Saves the sync and pushes straight away, so a wrong URL or token shows at once.
+  rpc SetGitSync(SetGitSyncRequest) returns (GitSync);
+  rpc DeleteGitSync(RepositoryRef) returns (Empty);
+
   // Lets an identity sign in as an existing account, e.g. the first administrator's email
   // address. Site administrators only.
   rpc LinkIdentity(LinkIdentityRequest) returns (Empty);
@@ -1094,4 +1101,31 @@ message AgentActivityResponse {
   repeated AgentSession sessions = 1;
   string owner = 2;
   bool paused = 3;
+}
+
+// A repository's git host sync. `url` empty: none is set up.
+message GitSync {
+  RepositoryRef repository = 1;
+  string url = 2;
+  // This repository's branch, and the git host's branch it updates.
+  string from_ref = 3;
+  string to_ref = 4;
+  string set_by = 5;
+  int64 set_at_ms = 6;
+  // The git commit last pushed, and when.
+  string pushed_commit = 7;
+  int64 pushed_at_ms = 8;
+  // Why the last try failed, in words for people; empty when it didn't.
+  string error = 9;
+  int64 tried_at_ms = 10;
+}
+
+message SetGitSyncRequest {
+  RepositoryRef repository = 1;
+  // An https git URL, e.g. https://github.com/acme/fleet.git.
+  string url = 2;
+  string from_ref = 3;
+  string to_ref = 4;
+  // A token with write access to the host repository's contents. Kept sealed; never returned.
+  string token = 5;
 }

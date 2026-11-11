@@ -20,8 +20,11 @@ gd migrate https://github.example.com/acme/fleet --to https://cloud.grovedock.co
 | **The repository** | created if it doesn't exist, with its GitHub description |
 
 Git commit ids don't change: every change remembers what git hashes (author and committer with
-their time zones, the message's encoding, signatures, submodule entries), so the git view of the
-repository (clones over HTTPS, `gd mirror`, `gd export-git`) is the same commits, merges included.
+their time zones, the message's encoding, signatures, submodule entries, and what old histories
+hold that git itself no longer writes: `100664` file modes from 2005, author names that aren't
+UTF-8, `mergetag` headers from merging signed tags), so the git view of the repository (clones
+over HTTPS, `gd mirror`, `gd export-git`) is the same commits, merges included. git/git's own
+82,542 commits come back with every id unchanged.
 Existing clones keep working: point them at Grovedock with one line,
 
 ```sh
@@ -29,11 +32,7 @@ git remote set-url origin https://cloud.grovedock.com/acme/fleet.git
 ```
 
 and links to commits keep their ids. (Signed commits keep theirs with git 2.48 or later on the
-machine that imports; with an older git they're imported without the signature, and get new ids.) One more exception: git's
-own first months (2005) stored some files with mode `100664`, which git no longer writes and
-can't re-import; Grovedock keeps them as ordinary files, so a repository whose history has them
-(git/git does, from its first commit) comes back with the same files and messages but new
-commit ids from that commit on. A repository started after 2005 is unaffected. Issues, pull requests and comments are posted by whoever runs the migration, each
+machine that imports; with an older git they're imported without the signature, and get new ids.) Issues, pull requests and comments are posted by whoever runs the migration, each
 naming its original GitHub author with a link to the original. Run it again later to bring
 across new commits; history is imported incrementally.
 
