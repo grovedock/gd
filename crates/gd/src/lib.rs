@@ -60,3 +60,11 @@ pub fn files(n: impl Into<u64>) -> String {
         n => format!("{n} files"),
     }
 }
+
+/// "1 minute", "2 minutes".
+pub fn minutes(n: impl Into<u64>) -> String {
+    match n.into() {
+        1 => "1 minute".into(),
+        n => format!("{n} minutes"),
+    }
+}

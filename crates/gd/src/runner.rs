@@ -303,14 +303,19 @@ async fn start(saved: Saved, work: PathBuf, once: bool, mode: Mode) -> Result<()
     );
     let mut backoff = Duration::from_secs(1);
     loop {
-        let claim = c
-            .claim_job(ClaimJobRequest {
-                wait_ms: 30_000,
+        // The server holds a claim up to CLAIM_WAIT. A connection that died without closing (the
+        // server restarted mid-request) never answers, so a claim gets a deadline, and after any
+        // failure the runner connects afresh instead of reusing what may be a dead connection.
+        let claim = within(
+            CLAIM_WAIT + CLAIM_MARGIN,
+            c.claim_job(ClaimJobRequest {
+                wait_ms: CLAIM_WAIT.as_millis() as u32,
                 machine_labels: labels.clone(),
                 version: env!("CARGO_PKG_VERSION").into(),
                 os: os.into(),
-            })
-            .await;
+            }),
+        )
+        .await;
         let job = match claim {
             Ok(r) => {
                 backoff = Duration::from_secs(1);
@@ -321,6 +326,7 @@ async fn start(saved: Saved, work: PathBuf, once: bool, mode: Mode) -> Result<()
                 eprintln!("couldn't reach the server ({}); trying again in {}s", s.message(), backoff.as_secs());
                 tokio::time::sleep(backoff).await;
                 backoff = (backoff * 2).min(Duration::from_secs(15));
+                c = client(&saved)?;
                 continue;
             }
         };
@@ -733,7 +739,7 @@ async fn execute(
             status = expr::Status::Cancelled;
             if failure.is_empty() {
                 failure = if job_started.elapsed() > job_limit {
-                    format!("Timed out after {} minutes", job.timeout_minutes)
+                    format!("Timed out after {}", gd::minutes(job.timeout_minutes))
                 } else {
                     "Cancelled".into()
                 };
@@ -1997,7 +2003,7 @@ async fn shell_step(
                 out.line("Cancelled");
                 StepOutcome::Cancelled("Cancelled".into())
             } else {
-                let why = format!("Timed out after {} minutes", limit.as_secs().div_ceil(60));
+                let why = format!("Timed out after {}", gd::minutes(limit.as_secs().div_ceil(60)));
                 out.line(&why);
                 StepOutcome::Failed(why)
             };
@@ -2009,16 +2015,7 @@ async fn shell_step(
         Ok(s) if s.success() => StepOutcome::Passed,
         Ok(s) => {
             let t = tail.lock().unwrap();
-            // The first line that looks like the error, else the last thing it said.
-            let line = t
-                .iter()
-                .find(|l| {
-                    let l = l.to_ascii_lowercase();
-                    l.contains("error") || l.contains("failed") || l.contains("panicked")
-                })
-                .or_else(|| t.iter().rev().find(|l| !l.trim().is_empty()))
-                .cloned()
-                .unwrap_or_default();
+            let line = failure_line(&t);
             let code = s.code().map_or("a signal".to_owned(), |c| format!("exit code {c}"));
             StepOutcome::Failed(if line.is_empty() {
                 format!("ended with {code}")
@@ -2028,6 +2025,73 @@ async fn shell_step(
         }
         Err(e) => StepOutcome::Failed(format!("couldn't wait for the step: {e}")),
     }
+}
+
+/// How long the server may hold a claim for work, and how much longer the runner waits for its
+/// answer before it treats the connection as dead.
+const CLAIM_WAIT: Duration = Duration::from_secs(30);
+const CLAIM_MARGIN: Duration = Duration::from_secs(30);
+
+/// A call's answer, or `Unavailable` once `limit` passes without one.
+async fn within<T>(
+    limit: Duration,
+    call: impl std::future::Future<Output = Result<T, tonic::Status>>,
+) -> Result<T, tonic::Status> {
+    tokio::time::timeout(limit, call)
+        .await
+        .unwrap_or_else(|_| Err(tonic::Status::unavailable(format!("no answer in {}s", limit.as_secs()))))
+}
+
+/// The line that says why a step failed: the first that reads like an error, else the last
+/// thing it said; terminal colours removed. `error` counts as a word, not inside a name
+/// (`thiserror`, `anyhow::Error`, a file called `error.rs`).
+fn failure_line(tail: &[String]) -> String {
+    // `::error file=…::message` (a workflow command) reads as its message.
+    let plain: Vec<String> = tail
+        .iter()
+        .map(|l| {
+            let l = strip_ansi(l);
+            match l.trim_start().strip_prefix("::error").and_then(|r| r.split_once("::")) {
+                Some((_, msg)) => format!("error: {msg}"),
+                None => l,
+            }
+        })
+        .collect();
+    let is_error = |l: &str| {
+        let l = l.trim_start().to_ascii_lowercase();
+        l.starts_with("error")
+            || l.contains("error:")
+            || l.contains("error[")
+            || l.contains("panicked")
+            || l.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "failed")
+    };
+    plain
+        .iter()
+        .find(|l| is_error(l))
+        .or_else(|| plain.iter().rev().find(|l| !l.trim().is_empty()))
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// A line without its terminal escape sequences (colours, bold: `ESC [ … letter`).
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                for c in chars.by_ref() {
+                    if ('@'..='~').contains(&c) {
+                        break;
+                    }
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// Stops a step and everything it started: its process group (the step was started as the
@@ -2047,6 +2111,41 @@ fn kill_group(pid: Option<u32>) {
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn a_call_on_a_dead_connection_gives_up_instead_of_hanging() {
+        let never = std::future::pending::<Result<(), tonic::Status>>();
+        let got = super::within(std::time::Duration::from_millis(50), never).await;
+        assert_eq!(got.unwrap_err().code(), tonic::Code::Unavailable);
+        let fine = super::within(std::time::Duration::from_secs(1), async { Ok::<_, tonic::Status>(7) }).await;
+        assert_eq!(fine.unwrap(), 7);
+    }
+
+    #[test]
+    fn a_failed_step_names_its_error_not_a_crate_called_thiserror() {
+        let tail = |lines: &[&str]| lines.iter().map(|l| l.to_string()).collect::<Vec<_>>();
+        let cargo = tail(&[
+            "\u{1b}[1m\u{1b}[92m Downloaded\u{1b}[0m thiserror v2.0.21",
+            "   Compiling anyhow v1.0.0",
+            "\u{1b}[1m\u{1b}[91merror[E0425]\u{1b}[0m: cannot find value `x` in this scope",
+        ]);
+        assert_eq!(super::failure_line(&cargo), "error[E0425]: cannot find value `x` in this scope");
+        let quiet = tail(&["\u{1b}[1m\u{1b}[92m Downloaded\u{1b}[0m thiserror v2.0.21", ""]);
+        assert_eq!(
+            super::failure_line(&quiet),
+            " Downloaded thiserror v2.0.21",
+            "no error: the last line, without colours"
+        );
+        assert_eq!(
+            super::failure_line(&tail(&["test result: FAILED. 1 passed; 2 failed"])),
+            "test result: FAILED. 1 passed; 2 failed"
+        );
+        assert_eq!(super::failure_line(&tail(&["Error: no such file", "done"])), "Error: no such file");
+        assert_eq!(
+            super::failure_line(&tail(&["::error file=FAIL,line=1::FAIL file present"])),
+            "error: FAIL file present"
+        );
+    }
+
     use super::*;
 
     /// Stopping a step stops its process group, and nothing else (Linux's `kill` program once

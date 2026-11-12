@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.0.7] - 2026-11-12
+
+### Fixed
+- Runs: a required check could be bypassed. A final job that `needs` the others was skipped when they failed, and a skipped required check counted as passed, so a change request whose builds failed could land on a protected branch. Such a job now fails ("Not run: a job it needs failed").
+- Runners: a runner whose connection died during a server restart stopped taking jobs while still running. Each request for work now has a deadline, and the runner reconnects after any failure.
+- Runs: `paths:` filters were ignored on a branch's first push, so creating a branch started every path-filtered workflow (using a Free plan's hosted minutes and delaying the real checks).
+- Runs: a failed step's reason is its actual error, without terminal colours: not a line like "Downloaded thiserror"; `::error` annotations read as their message; "1 minute", not "1 minutes".
+- The gd repository on Grovedock runs its own workflow; GitHub-only workflows (fuzzing, CodeQL, Scorecard, macOS and Windows) no longer run and fail there.
+
 ## [4.0.6] - 2026-11-12
 
 ### Fixed
