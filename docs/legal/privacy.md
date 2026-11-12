@@ -21,7 +21,7 @@ This notice is available in English. If you want it in any language listed in th
 | Data | Our role | What that means |
 |---|---|---|
 | Your account, sign-in, billing, support and security data | **Data Fiduciary** (we decide why and how it is used) | This policy applies directly. |
-| Personal data that happens to be **inside customers' repositories** (e.g. author names and emails in commit history, data in files) | **Data Processor** acting for the customer organisation | The customer organisation is the Data Fiduciary. We process it only on their instructions under our [Data Processing Addendum](./dpa.md). If your data appears in someone's repository, please contact that organisation first; we will help them respond. |
+| Personal data that happens to be **inside customers' repositories** (e.g. author names and emails in commit history, data in files) | **Data Processor** acting for the customer organisation | The customer organisation is the Data Fiduciary. We process it only on their instructions under our Data Processing Addendum (sent on request to grievance@grovedock.com). If your data appears in someone's repository, please contact that organisation first; we will help them respond. |
 
 ## 3. What we collect, why, and our legal basis
 
@@ -129,7 +129,7 @@ If a personal data breach affects you, we will:
 - **Tell you without delay** — by email and/or in the product — describing what happened, when, the likely impact on you, what we're doing about it, what you can do to protect yourself, and who to contact.
 - **Tell the Data Protection Board of India** without delay and send a detailed report within **72 hours** of becoming aware (DPDP Rules, Rule 7 — once in force).
 - **Report cyber-security incidents to CERT-In within 6 hours** of noticing them, as required by the CERT-In Directions of 28 April 2022.
-- **Tell affected business customers within 72 hours** about breaches involving their repository data (see [DPA](./dpa.md)).
+- **Tell affected business customers within 72 hours** about breaches involving their repository data (as our Data Processing Addendum sets out).
 
 ## 12. Children
 

@@ -7,8 +7,8 @@ src = "."
 
 [output.html]
 site-url = "/docs/"
-git-repository-url = "https://github.com/grovedock/gd"
-edit-url-template = "https://github.com/grovedock/gd/edit/main/docs/{path}"
+git-repository-url = "https://cloud.grovedock.com/grovedock/gd"
+edit-url-template = "https://cloud.grovedock.com/grovedock/gd/code/docs/{path}"
 additional-css = ["theme/gd.css"]
 additional-js = ["theme/gd.js"]
 default-theme = "light"

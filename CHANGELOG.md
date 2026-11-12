@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-11-12
+
+### Fixed
+- Runs: a push by a maintainer ran as code from outside (held for approval, without secrets). Lands are batched on a task of their own that lost who landed, so the run took the commit's author name instead of the account.
+- README and Markdown: centred blocks (`<p align="center">`) line up with a centred heading; ```` ```mermaid ```` blocks draw as diagrams.
+
+### Added
+- Release files at URLs that never change, for public repositories' published releases: `/OWNER/REPO/releases/download/TAG/FILE`, `/OWNER/REPO/releases/latest/download/FILE`, and `/OWNER/REPO/releases/latest` (the newest release's page). `install.sh` and the Homebrew formula download gd from Grovedock.
+
+### Changed
+- Free plan: 6 GB of storage per organisation (was 1 GB), 500 hosted runner minutes a month, one job at a time.
+- The gd repository's home is Grovedock: source, issues, releases and security reports (security@grovedock.com).
+
 ## [4.0.5] - 2026-11-12
 
 ### Security

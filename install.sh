@@ -1,14 +1,14 @@
 #!/bin/sh
 # Install the latest gd release (gd + git-remote-gd) for macOS or Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
+#   curl -fsSL https://grovedock.com/install.sh | sh
 #
 # Environment:
 #   GD_VERSION   release tag to install (default: latest), e.g. v1.0.1
 #   GD_INSTALL   install directory (default: ~/.local/bin)
 set -eu
 
-REPO="grovedock/gd"
+REPO="${GD_RELEASES:-https://cloud.grovedock.com/grovedock/gd}"
 DEST="${GD_INSTALL:-$HOME/.local/bin}"
 
 fail() { echo "gd install: $*" >&2; exit 1; }
@@ -20,7 +20,7 @@ need uname
 case "$(uname -s)" in
   Darwin) os=apple-darwin ;;
   Linux) os=unknown-linux-gnu ;;
-  *) fail "unsupported OS $(uname -s); on Windows download the .zip from https://github.com/$REPO/releases" ;;
+  *) fail "unsupported OS $(uname -s); on Windows download the .zip from $REPO/releases" ;;
 esac
 case "$(uname -m)" in
   x86_64 | amd64) arch=x86_64 ;;
@@ -30,12 +30,13 @@ esac
 
 version="${GD_VERSION:-}"
 if [ -z "$version" ]; then
-  version="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+  # The newest release answers with a redirect to its page, which ends with its tag.
+  version="$(curl -fsSI "$REPO/releases/latest" | tr -d '\r' | sed -n 's#^[Ll]ocation: .*/releases/\([^/]*\)$#\1#p' | head -n1)"
   [ -n "$version" ] || fail "could not determine the latest release"
 fi
 
 name="gd-$version-$arch-$os"
-url="https://github.com/$REPO/releases/download/$version/$name.tar.gz"
+url="$REPO/releases/download/$version/$name.tar.gz"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

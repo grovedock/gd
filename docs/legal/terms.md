@@ -58,7 +58,7 @@ We may remove content or restrict access that breaks this section or the law (se
 - **You own your Customer Content.** We claim no ownership of it.
 - You give us a limited, non-exclusive, worldwide, royalty-free licence to host, copy, store, process, back up, transmit and display your Customer Content **only as needed to provide, secure and support the Service for you** (and for anyone you share it with). This licence ends when the Customer Content is deleted from our systems (section 11).
 - You confirm you have the rights needed to put your Customer Content into the Service and to give us this licence.
-- If your Customer Content contains personal data about other people, you are responsible for having a lawful basis for that. For business customers, our [Data Processing Addendum](./dpa.md) applies.
+- If your Customer Content contains personal data about other people, you are responsible for having a lawful basis for that. For business customers, our Data Processing Addendum applies (sent on request to grievance@grovedock.com).
 
 ## 6. Confidentiality of your code
 
@@ -111,7 +111,7 @@ Prices are in Indian rupees. While we are not registered for GST, no GST is char
 - Usage-based amounts (active agents added during a period) are billed in arrears, after the month ends.
 - **Taxes.** We are not currently registered for GST, so no GST is charged and we cannot issue a tax invoice that supports input tax credit. If we register, we will tell you in advance and GST will be added from that date.
 - Razorpay emails a receipt for every payment.
-- Refunds are covered by our [Refund and Cancellation Policy](./refund-and-cancellation.md).
+- Refunds are covered by our [Refund and Cancellation Policy](./refunds.md).
 
 ## 10. Non-payment and suspension
 
@@ -147,7 +147,7 @@ We may add, change or remove features. If we remove a feature that is a material
 
 ## 14. Open-source software
 
-gd (the protocol, the `gd` command-line tool, the git bridge and the SDKs) is open source at https://github.com/grovedock/gd under the Apache-2.0 licence. Nothing in these terms limits your rights under that licence. The Service itself, including its server and web app, is ours and is not open source.
+gd (the protocol, the `gd` command-line tool, the git bridge and the SDKs) is open source at https://cloud.grovedock.com/grovedock/gd under the Apache-2.0 licence. Nothing in these terms limits your rights under that licence. The Service itself, including its server and web app, is ours and is not open source.
 
 ## 15. Warranty disclaimer
 

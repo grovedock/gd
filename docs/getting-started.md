@@ -21,10 +21,10 @@ Other ways:
 curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
 
 # From source
-cargo install --locked --git https://github.com/grovedock/gd grovedock
+cargo install --locked --git https://cloud.grovedock.com/grovedock/gd.git grovedock
 ```
 
-Windows: download the `.zip` from the [releases page](https://github.com/grovedock/gd/releases).
+Windows: download the `.zip` from the [releases page](https://cloud.grovedock.com/grovedock/gd/releases).
 You get `gd` and `git-remote-gd` (which lets plain git talk to Grovedock).
 
 ## 3. Sign in from the terminal

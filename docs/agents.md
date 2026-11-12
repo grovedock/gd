@@ -136,11 +136,11 @@ clone. Every client verifies content against its BLAKE3 id.
 
 | Language | Package | Example |
 |---|---|---|
-| Python | [`sdk/python`](https://github.com/grovedock/gd/tree/main/sdk/python) | `Client(url).read_file("src/lib.rs")` |
-| TypeScript | [`sdk/typescript`](https://github.com/grovedock/gd/tree/main/sdk/typescript) | `await new Client(url).readFile("src/lib.rs")` |
-| Go | [`sdk/go`](https://github.com/grovedock/gd/tree/main/sdk/go) | `c.ReadFile(ctx, "main", "src/lib.rs")` |
+| Python | [`sdk/python`](https://cloud.grovedock.com/grovedock/gd/code/sdk/python) | `Client(url).read_file("src/lib.rs")` |
+| TypeScript | [`sdk/typescript`](https://cloud.grovedock.com/grovedock/gd/code/sdk/typescript) | `await new Client(url).readFile("src/lib.rs")` |
+| Go | [`sdk/go`](https://cloud.grovedock.com/grovedock/gd/code/sdk/go) | `c.ReadFile(ctx, "main", "src/lib.rs")` |
 
 For any other language, generate a client from
-[`gd.proto`](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd.proto).
+[`gd.proto`](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd.proto).
 Object encodings are in
-[`gd_objects.proto`](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_objects.proto).
+[`gd_objects.proto`](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_objects.proto).

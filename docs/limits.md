@@ -9,7 +9,7 @@ how many calls a minute. Prices are on [the pricing page](https://grovedock.com/
 |---|---|---|---|
 | People | 3 | as many as you buy | by licence |
 | Active agents a month | 5 | not capped; beyond the number you buy, billed per agent for that month | by licence |
-| Storage | 1 GB | 50 GB | your own servers |
+| Storage | 6 GB | 50 GB | your own servers |
 | Private repositories | 5 (public ones unlimited) | unlimited | unlimited |
 | Calls a minute, per person or agent | 300 | 3,000 | your own servers |
 

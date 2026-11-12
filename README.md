@@ -11,8 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/grovedock/gd/actions/workflows/ci.yml"><img src="https://github.com/grovedock/gd/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/grovedock/gd/releases"><img src="https://img.shields.io/github/v/release/grovedock/gd?color=16324F" alt="Latest release"></a>
+  <a href="https://cloud.grovedock.com/grovedock/gd/releases"><img src="https://img.shields.io/badge/releases-on_Grovedock-16324F" alt="Releases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-16324F" alt="Apache-2.0"></a>
   <a href="https://grovedock.com/docs/"><img src="https://img.shields.io/badge/docs-read-F0B429" alt="Documentation"></a>
 </p>
@@ -63,8 +62,8 @@ sequenceDiagram
 ## Try it in a minute
 
 ```sh
-brew install kabirnarang39/tap/grovedock  # or: curl -fsSL https://raw.githubusercontent.com/grovedock/gd/main/install.sh | sh
-                                          # or: cargo install --locked --git https://github.com/grovedock/gd grovedock
+brew install kabirnarang39/tap/grovedock  # or: curl -fsSL https://grovedock.com/install.sh | sh
+                                          # or: cargo install --locked --git https://cloud.grovedock.com/grovedock/gd.git grovedock
 
 gd login https://cloud.grovedock.com                             # opens your browser; free, no card
 gd import-git . --server https://cloud.grovedock.com/acme/web   # bring a git repository, history included
@@ -81,8 +80,8 @@ claude mcp add --transport http gd https://cloud.grovedock.com/mcp \
 
 ## What's in this repository
 
-gd is to [Grovedock](https://grovedock.com) what git is to GitHub. This repository is the open
-part, all Apache-2.0:
+gd is the open protocol and tools; [Grovedock](https://grovedock.com) is the platform built on
+them. This repository is the open part, all Apache-2.0:
 
 | | What |
 |---|---|
@@ -105,10 +104,10 @@ network, git is the better tool, and gd's git bridge lets the two meet.
 
 ## Contributing
 
-Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains the layout,
+[Issues](https://cloud.grovedock.com/grovedock/gd/issues) and change requests are welcome, from anyone with a free Grovedock account. [CONTRIBUTING.md](CONTRIBUTING.md) explains the layout,
 how to run the tests and what makes a change easy to accept; issues labelled
-[`good first issue`](https://github.com/grovedock/gd/labels/good%20first%20issue) are a good
-place to start. Security reports go to [SECURITY.md](SECURITY.md), never to public issues.
+[`good first issue`](https://cloud.grovedock.com/grovedock/gd/issues) are a good
+place to start. Security reports go to security@grovedock.com ([SECURITY.md](SECURITY.md)), never to public issues.
 
 A grove is many trees on one root, like many agents on one history; a dock is where their
 changes land.

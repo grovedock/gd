@@ -1,12 +1,12 @@
 #!/bin/sh
 # Print the Homebrew formula for a published release, using its checksum files.
-# Usage: scripts/homebrew-formula.sh v1.8.0 > Formula/grovedock.rb   (needs gh)
+# Usage: scripts/homebrew-formula.sh v1.8.0 > Formula/grovedock.rb
 set -eu
 tag=$1
 
-base="https://github.com/grovedock/gd/releases/download/$tag"
+base="https://cloud.grovedock.com/grovedock/gd/releases/download/$tag"
 sum() {
-  gh release download "$tag" --repo grovedock/gd --pattern "gd-$tag-$1.tar.gz.sha256" --output - | cut -d' ' -f1
+  curl -fsSL "$base/gd-$tag-$1.tar.gz.sha256" | cut -d' ' -f1
 }
 # Fetch every checksum before printing anything: a release still being built has no assets
 # yet, and a formula with an empty checksum must never be written.

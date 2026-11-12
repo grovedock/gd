@@ -8,7 +8,7 @@ Calls to a server that hosts many repositories name one with the `x-gd-repo: OWN
 
 ## `gd.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd.proto)
 
 ### Objects
 
@@ -96,7 +96,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_imports.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_imports.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_imports.proto)
 
 ### Imports
 
@@ -108,7 +108,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_insights.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_insights.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_insights.proto)
 
 ### Insights
 
@@ -118,7 +118,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_issues.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_issues.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_issues.proto)
 
 ### Issues
 
@@ -145,7 +145,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_landing.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_landing.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_landing.proto)
 
 ### Landing
 
@@ -155,7 +155,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_packet.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_packet.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_packet.proto)
 
 ### Packets
 
@@ -165,7 +165,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_platform.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_platform.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_platform.proto)
 
 ### Platform
 
@@ -241,7 +241,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_releases.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_releases.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_releases.proto)
 
 ### Releases
 
@@ -260,7 +260,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_runs.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_runs.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_runs.proto)
 
 ### Runs
 
@@ -288,7 +288,7 @@ Server-side rebase + lock-free compare-and-swap of a ref.
 
 ## `gd_social.proto`
 
-[Source](https://github.com/grovedock/gd/blob/main/crates/proto/proto/gd_social.proto)
+[Source](https://cloud.grovedock.com/grovedock/gd/code/crates/proto/proto/gd_social.proto)
 
 ### Social
 

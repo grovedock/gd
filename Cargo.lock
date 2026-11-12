@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "grovedock"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1104,7 +1104,7 @@ dependencies = [
 
 [[package]]
 name = "grovedock-adapters"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1127,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "grovedock-core"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1149,7 +1149,7 @@ dependencies = [
 
 [[package]]
 name = "grovedock-proto"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "grovedock-core",
  "prost",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "grovedock-workflow"
-version = "4.0.5"
+version = "4.0.6"
 dependencies = [
  "globset",
  "regex",

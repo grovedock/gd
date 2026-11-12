@@ -21,6 +21,8 @@ done
 if grep -n '{{' "$out"/*.html; then echo "build-site: unfilled {{KEY}} above; add it to site/site.conf" >&2; exit 1; fi
 
 cp "$root/site/social-preview.png" "$root/site/site.css" "$out/"
+# The installer: curl -fsSL https://grovedock.com/install.sh | sh
+cp "$root/install.sh" "$out/install.sh"
 # The custom domain: the site serves from the root of https://grovedock.com/.
 printf 'grovedock.com\n' > "$out/CNAME"
 cp "$root/docs/assets/brand/mark.svg" "$out/mark.svg"

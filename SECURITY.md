@@ -9,16 +9,15 @@
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue. Use GitHub's
-[private vulnerability reporting](https://github.com/grovedock/gd/security/advisories/new).
+Please **do not** open a public issue. Email **security@grovedock.com**.
 You will receive an acknowledgement within 72 hours (and in any case within 14 days) and a
 fix timeline after triage.
 
 Please include the affected version (`gd --version`), the component (client, server,
 SDK, console), steps to reproduce and the impact you expect. We fix confirmed medium or
 higher severity issues within 60 days, coordinate the disclosure date with the reporter,
-publish a GitHub security advisory, and list the fix, with its CVE or advisory id, under
-**Security** in [CHANGELOG.md](https://github.com/grovedock/gd/blob/main/CHANGELOG.md) and the release notes.
+publish a security advisory, and list the fix, with its CVE or advisory id, under
+**Security** in [CHANGELOG.md](CHANGELOG.md) and the release notes.
 
 ## Security model (v1)
 
@@ -46,8 +45,7 @@ publish a GitHub security advisory, and list the fix, with its CVE or advisory i
 ## Audit trail
 
 Run the server with `--audit-log FILE` to record who read or changed what, from where,
-with what result, including rejected requests. The format is described in the
-[security guide](https://grovedock.com/docs/security.html#audit-log).
+with what result, including rejected requests: one JSON line per event.
 
 ## Verifying a release
 

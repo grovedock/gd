@@ -47,20 +47,19 @@ cargo test --workspace
 
 ## Tests for new functionality
 
-Every new feature and every behaviour change lands with automated tests in the same pull
+Every new feature and every behaviour change lands with automated tests in the same change
 request: unit tests next to the code, and an end-to-end test in `crates/*/tests/` for anything
 a user can run. A bug fix includes a test that fails without the fix. Changes are not merged
 without them. See [How Grovedock is tested](https://grovedock.com/docs/testing.html).
 
 ## Questions and discussion
 
-Ask questions and discuss ideas in
-[GitHub Discussions](https://github.com/grovedock/gd/discussions); track bugs and
-feature requests as [issues](https://github.com/grovedock/gd/issues). Both are public,
-searchable and open to anyone with a GitHub account. Issues, pull requests and code comments
+Ask questions, discuss ideas and track bugs and feature requests as
+[issues](https://cloud.grovedock.com/grovedock/gd/issues). They are public,
+searchable and open to anyone with a free Grovedock account. Issues, change requests and code comments
 are in English.
 
 ## Reporting bugs
 
 Open an issue with the `gd --version` and `grovedockd --version` output, the command, what
-you expected and what happened. Security issues: see [SECURITY.md](https://github.com/grovedock/gd/blob/main/SECURITY.md).
+you expected and what happened. Security issues: see [SECURITY.md](SECURITY.md).
